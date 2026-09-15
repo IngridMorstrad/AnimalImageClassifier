@@ -965,3 +965,41 @@ Spec compliance: **no violation**. `tests/` holds exactly two `.py` files, both 
 **Nothing blocked.** No failure to hand to the `code` step. Unproven by any e2e test so far:
 everything past the CLI surface — chunks 4-26, including E1-E5 and E7-E26. 23 of 26 chunks remain,
 so `impl-status.json` `complete` stays `false`.
+
+## 2026-09-15 22:17 UTC — gate review of chunk 3 (`catalog.py`): CHANGES_REQUESTED, 1 blocking
+
+**Verdict: CHANGES_REQUESTED — 1 blocking finding.** Written to `docs/build-review.json`
+(`verdict`, 1 entry in `blocking`, 18 notes) with the narrative in `docs/build-review.md`.
+
+Range reviewed: `f682087..HEAD` — `c87a690` (catalog.py, 1038 lines; `CatalogLockedError`; the
+`Path.resolve()` symlink fix; pytest moved to a PEP 735 dependency group; `tests/e2e/conftest.py` and
+`tests/e2e/test_cli_surface.py`) and `6377ac8` (the test report). The suite was **not** re-run — the
+`code` and `e2e` steps' captured output was read instead.
+
+The single blocking finding is unchanged in kind from iteration 1: `docs/impl-status.json` has
+`complete: false` at `done_items: 3` of 26, and `IMPL-PLAN.md`'s checkboxes agree (3 checked, 23
+open). Nothing that landed needs to be undone.
+
+What the review confirmed by reading the diff:
+
+- **Invariant I2 clean and now executably guarded.** No area floor under any name; `area_frac` is
+  never compared to anything (`grep -rnE 'area_frac\s*[<>]'` → zero matches). The 7 green tests are
+  the guard: if anyone adds a `--min-box-area`-style option, the suite fails immediately.
+- **DEFECT 1's fix is present and hard to undo.** One `INSERT INTO skipped` in the whole tree, and it
+  is the named `ON CONFLICT(path) DO UPDATE` constant; `sources` matches; `replace_inference` deletes
+  before re-inserting inside one `BEGIN IMMEDIATE`; `first_seen` is excluded from every UPDATE list.
+- **Fail-loud, read-only card, append-only overrides, lock-contention-as-exit-4** all hold.
+- **e2e-only respected** — two `.py` files under `tests/e2e/`, zero unit tests, real subprocess CLI.
+- Both of iteration 1's mediums were fixed **early**, ahead of their chunk-11 and chunk-9 deadlines.
+
+What it does not prove: everything past the CLI surface. Every catalog claim above rests on source
+reading, so DEFECT 1's fix stays unproven until chunk 9's `classify` test runs.
+
+Seven new follow-ups appended to `docs/FOLLOWUPS.md` (F1-F5, F7). **F1 is the one that matters
+before chunk 5**: `ensure_image` refreshes `status`/`run_id` and defaults to `planned`, so an
+unconditional call from the scanner would reset `done` rows and defeat the clean-no-op invariant from
+the caller side, where the `skipped` upsert cannot protect it. No caller exists yet.
+
+Next: chunk 4, `taxonomy/` — `slug()`, `LABEL_RE`, `RESERVED_LABELS` and the static name tables
+(DEFECT 2's normalization layer, the thing that keeps `022_chuck_will_widow` from ever becoming an
+output directory name).

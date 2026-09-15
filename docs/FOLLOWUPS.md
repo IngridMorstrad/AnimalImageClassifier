@@ -55,3 +55,47 @@ The first two mediums above are fixed in this commit, ahead of their deadlines:
       TOML file containing these is fatal. This matches DESIGN.md, which presents them only as
       flags (e.g. `--detector scripted` in the E6 row). Closed as correct-as-written; recorded only
       so a future reader does not mistake it for an omission.
+
+## From build review iteration 2 (2026-09-15 22:17 UTC, `6377ac8`, chunk 3 / `catalog.py`)
+
+Nothing below withholds approval. **F1 is the one to read before writing chunk 5** — it is a latent
+correctness trap rather than polish, though it has no caller today so nothing is broken yet.
+
+- [ ] **F1 — `ensure_image`'s upsert refreshes `status`/`run_id` and defaults to `planned`, which a
+      naive scanner would use to reset `done` rows** (high priority — act on it in chunk 5,
+      `scan.py`). `ensure_image` (`src/animal_classifier/catalog.py:~660-700`) puts `status` and
+      `run_id` in its `ON CONFLICT DO UPDATE` list and defaults `status=Status.PLANNED`. If chunk 5's
+      scanner calls it unconditionally for every hash it walks, a second run over the same card
+      silently resets every `done` row to `planned`; `plan_disposition` decides `SKIP_DONE` purely
+      from `row.status`, so the whole card would be re-processed. That defeats the
+      second-run-is-a-clean-no-op invariant from the *caller* side rather than via the `skipped`
+      table, so DEFECT 1's upsert does not protect against it. No caller exists today (`grep` for
+      `ensure_image` outside `catalog.py` returns nothing). Fix: either consult `plan_disposition`
+      before calling `ensure_image`, or make `status`/`run_id` refreshable only under an explicit
+      opt-in argument. Chunk 9's idempotency e2e test must cover it either way.
+
+- [ ] **F2 — `write_tx`'s unconditional `ROLLBACK` can mask the original exception** (low).
+      `catalog.py:~470-480`: the `except BaseException` branch issues `ROLLBACK` before re-raising.
+      If SQLite has already rolled the transaction back, that statement raises
+      `cannot rollback - no transaction is active` and the real error is lost. Guard it so the
+      original propagates.
+
+- [ ] **F3 — read accessors return inconsistent types** (low, GUI-facing). `image()`, `run()` and
+      `newest_run()` return frozen value objects (`ImageRow`, `RunRow`); `boxes()`, `candidates()`
+      and `newest_override()` return raw `sqlite3.Row`. Fine inside the module. Decide before the GUI
+      serializers land in chunks 20-22 so row-index access does not leak into the web layer.
+
+- [ ] **F4 — `update_run_counts` is a silent no-op when every count is `None`** (nit).
+      `catalog.py:~576-586` returns early rather than raising, so a caller that passes nothing gets a
+      successful no-op. Defensible for an all-optional progress publisher; recorded so it reads as a
+      decision, not an oversight.
+
+- [ ] **F5 — `runs.state` has no CHECK constraint** (nit). `images.status` and `images.label_source`
+      are CHECK-constrained; `runs.state` is not, so `RunState` is enforced only in Python. Faithful
+      to §5.9, which declares the column without enumerating its values — recorded as spec fidelity,
+      not drift.
+
+- [ ] **F7 — DEFECT 1's fix has no executable proof yet** (informational, self-resolving at chunk 9).
+      The `skipped` upsert, `replace_inference`'s replace-not-append semantics and the `first_seen`
+      protection are all asserted by source reading; the 7 green tests exercise `--help` only.
+      Recorded so nobody later mistakes "reviewed" for "tested".
