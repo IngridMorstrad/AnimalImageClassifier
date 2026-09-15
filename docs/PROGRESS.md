@@ -322,3 +322,34 @@ filters.
 
 Next: design iteration 3 addressing the HIGH and all 13 MEDIUMs, then re-review. Still zero
 implementation code.
+
+### Addendum (16:30 UTC) — review pipeline diagrams
+
+The previous commit's message lost its two ASCII diagrams to shell expansion (backticks in a
+heredoc-free `-m` string). Recording them here instead of rewriting a pushed commit:
+
+Relationships:
+
+```
+PLAN.md ──┐
+RECON.md ─┼─> DESIGN.md ──> design-review.md ──> design-review.json (gate: verdict)
+          │                        ^
+probes ───┘                        │
+(MegaDetector load/forward with roboflow+sahi blocked, uv pip compile of §2.1,
+ pillow-heif HEIF round-trip, COCO recount via the design's own split_for)
+```
+
+Sequence:
+
+```
+reviewer -> DESIGN.md          : read in full (1101 lines)
+reviewer -> sandbox            : 4 probes + COCO recount
+sandbox  -> reviewer           : every number matches DESIGN.md
+reviewer -> design-review.md   : 20 findings + verified/unverified assumptions
+reviewer -> design-review.json : verdict CHANGES_REQUESTED (1 HIGH / 13 MEDIUM / 6 NIT)
+reviewer -> PROGRESS.md        : this entry
+```
+
+Probe artifacts live outside the repo (`/projects/sandbox/.review_block_probe.py`,
+`.review_coco_check.py`, `.depcheck/pyproject.toml`, `.heifprobe/`) so they do not enter the package;
+each is a few lines and reproducible from the descriptions above.
