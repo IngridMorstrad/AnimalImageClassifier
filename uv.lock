@@ -45,11 +45,13 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-]
 raw = [
     { name = "rawpy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
 ]
 
 [package.metadata]
@@ -60,7 +62,6 @@ requires-dist = [
     { name = "opencv-python-headless", specifier = "==5.0.0.93" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "pillow-heif", specifier = "==1.7.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "rawpy", marker = "extra == 'raw'", specifier = "==0.27.1" },
     { name = "setuptools", specifier = "==80.10.2" },
     { name = "timm", specifier = "==1.0.29" },
@@ -70,7 +71,10 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.39.0" },
     { name = "yolov5", specifier = "==7.0.14" },
 ]
-provides-extras = ["raw", "dev"]
+provides-extras = ["raw"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = "==9.1.1" }]
 
 [[package]]
 name = "annotated-doc"

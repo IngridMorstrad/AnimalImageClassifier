@@ -94,7 +94,20 @@ class CatalogError(AnimalClassifierError):
 
     A schema version newer than this build refuses to touch the DB (exit 3).
     Lock contention is *not* this error: it is retried with backoff and, if it
-    still fails, recorded against the individual image (exit 4).
+    still fails, recorded against the individual image (exit 4) — that outcome is
+    :class:`CatalogLockedError`.
     """
 
     exit_code = EXIT_CONFIG
+
+
+class CatalogLockedError(AnimalClassifierError):
+    """A write transaction still lost the lock after the documented backoff.
+
+    Deliberately *not* a :class:`CatalogError`: the catalog is fine, this one
+    write did not get through. DESIGN.md §5.9 requires that this be recorded
+    against the individual image and surface as a partial run (exit 4), never as
+    a fatal exit 1 that would abort the whole card.
+    """
+
+    exit_code = EXIT_PARTIAL

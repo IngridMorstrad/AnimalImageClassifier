@@ -1,8 +1,8 @@
 {
   "complete": false,
   "total_items": 26,
-  "done_items": 2,
-  "current_chunk": "3. catalog.py: schema, indexes, upserts, statuses — including reproduced DEFECT 1",
+  "done_items": 3,
+  "current_chunk": "4. taxonomy/: slug(), LABEL_RE, RESERVED_LABELS and the static name tables — DEFECT 2's normalization layer",
   "plan_file": "docs/IMPL-PLAN.md",
   "spec_of_record": "docs/DESIGN.md",
   "branch": "feat/safari-classifier",
@@ -15,5 +15,5 @@
     "F_gui": "chunks 20-22",
     "G_loop_closers_polish": "chunks 23-26"
   },
-  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk."
+  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk. As of chunk 3 the suite is non-empty and green (7 passed, exit 0): E6's CLI-surface leg landed early so pytest no longer exits 5 on an empty suite."
 }

@@ -83,7 +83,7 @@ no GUI yet.
       animal_classifier.config"` imports clean and `uv run --frozen pytest tests/e2e -q` still
       collects 0 failures.
 
-- [ ] 3. **`catalog.py`: schema, indexes, upserts, statuses — including reproduced DEFECT 1.**
+- [x] 3. **`catalog.py`: schema, indexes, upserts, statuses — including reproduced DEFECT 1.**
       Create the seven tables and four indexes of §5.9 verbatim (`PRIMARY KEY(box_id, rank)` on
       `candidates`, unique `(sha256, idx)` on `boxes`, `runs.source_root NOT NULL`), `PRAGMA
       journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=10000`, a `meta` schema version that

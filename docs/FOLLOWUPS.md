@@ -5,7 +5,7 @@ Append only; note the review iteration that raised each item.
 
 ## From build review iteration 1 (2026-09-15 21:57 UTC, `c59a656`)
 
-- [ ] **`output_root` is not symlink-resolved, so `_guard_nesting` can be evaded** (medium — fix by
+- [x] **`output_root` is not symlink-resolved, so `_guard_nesting` can be evaded** (medium — fix by
       chunk 11, before `materialize.py` exists). `_resolve_source_root` uses `Path.resolve()`
       (`src/animal_classifier/config.py:524`) but `_resolve_output_root` uses `os.path.abspath`
       (`config.py:551`), which normalises `..` without following symlinks. An `output_root` that is
@@ -15,7 +15,7 @@ Append only; note the review iteration that raised each item.
       does-not-exist-yet tolerance that motivated `abspath` is not needed. Harmless today because
       nothing in the tree writes.
 
-- [ ] **`pytest` is in `[project.optional-dependencies] dev` but the documented test command does
+- [x] **`pytest` is in `[project.optional-dependencies] dev` but the documented test command does
       not request it** (medium — before chunk 9). `docs/impl-status.json` quotes
       `uv run --frozen pytest tests/e2e -q`; `docs/test-report.md` ran `uv run pytest tests/e2e -v`.
       Neither passes `--extra dev`. It succeeded only because the existing venv has pytest; under
@@ -29,9 +29,26 @@ Append only; note the review iteration that raised each item.
       probe, but the two branches will drift. Parameterise as `config_search_paths(env)` and call it
       from both.
 
-- [ ] **pytest exits 5 on an empty suite, which reads as failure to an exit-code gate** (nit,
+- [x] **pytest exits 5 on an empty suite, which reads as failure to an exit-code gate** (nit,
       process). Already flagged by the e2e step in `docs/test-report.md`. Self-resolves when chunk 9
       lands the first test. Recorded so nobody debugs a phantom failure in the meantime.
+      **Closed in chunk 3**, earlier than planned: E6's CLI-surface leg
+      (`tests/e2e/test_cli_surface.py`) landed now because it is provable the moment a CLI exists,
+      so the suite is 7 passed / exit 0 instead of exit 5. Chunk 9 still lands E6's full form (a
+      real `classify` run proving the dominance rule decides alone).
+
+## Closed in chunk 3 (2026-09-15 22:11 UTC)
+
+The first two mediums above are fixed in this commit, ahead of their deadlines:
+
+- `_resolve_without_requiring_existence` now uses `Path(path).resolve()`, so an `output_root` that
+  is a symlink into the card is rejected by `_guard_nesting`. Verified with a real run: a symlink
+  `pics_link -> card/DCIM/out` now raises `ConfigError: output_root /…/card/DCIM/out is inside
+  SOURCE /…/card`, where before the fix it was accepted.
+- `pytest==9.1.1` moved from `[project.optional-dependencies] dev` to `[dependency-groups] dev`
+  (PEP 735). uv installs that group by default, so the canonical
+  `uv run --frozen pytest tests/e2e -q` resolves without `--extra dev`. `uv lock` + `uv sync
+  --frozen` re-locked cleanly (113 packages resolved).
 
 - [x] **`detector`, `limit`, `port` and the boolean flags are CLI/env-only, not TOML-settable**
       (nit — no action needed). `KNOWN_TOML_KEYS = frozenset(DEFAULTS)` (`config.py:127`) means a

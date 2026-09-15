@@ -691,8 +691,15 @@ def _resolve_output_root(layers: _Layers) -> Path:
 
 
 def _resolve_without_requiring_existence(path: Path) -> Path:
-    """Absolute + normalized, tolerating an output_root that does not exist yet."""
-    return Path(os.path.abspath(path))
+    """Absolute, normalized and **symlink-resolved**, tolerating a missing dir.
+
+    ``os.path.abspath`` would normalize ``..`` textually without following
+    symlinks, which lets an ``output_root`` that is itself a symlink *into* the
+    card pass all three :func:`_guard_nesting` checks and then be written to.
+    ``Path.resolve()`` is non-strict here: it resolves the existing ancestors of a
+    directory that does not exist yet, so nothing is lost by using it.
+    """
+    return Path(path).resolve()
 
 
 def _guard_nesting(source_root: Path | None, output_root: Path) -> None:

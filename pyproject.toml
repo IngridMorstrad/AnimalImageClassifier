@@ -23,6 +23,13 @@ dependencies = [
 
 [project.optional-dependencies]
 raw = ["rawpy==0.27.1"]
+
+# The test runner is tooling, not a feature of the shipped package, so it is a
+# PEP 735 dependency group rather than an extra. uv installs the `dev` group by
+# default, which is what makes the canonical gate command
+# `uv run --frozen pytest tests/e2e -q` resolve on a clean machine; as an extra it
+# only worked because the local venv already had pytest.
+[dependency-groups]
 dev = ["pytest==9.1.1"]
 
 [project.scripts]

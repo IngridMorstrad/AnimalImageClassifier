@@ -838,3 +838,93 @@ The two worth acting on soon: `output_root` uses `os.path.abspath` while `source
 `Path.resolve()`, so a symlinked `output_root` could evade `_guard_nesting` (fix before
 `materialize.py` lands in chunk 11); and `pytest` sits in the `dev` extra that neither documented
 test command requests, which will break under `--frozen` on a clean machine.
+
+---
+
+## 2026-09-15 22:11 UTC — chunk 3: `catalog.py` (schema, upserts, statuses) + DEFECT 1 fixed
+
+**Blocking finding B1** from build review iteration 1 was "keep going: 2 of 26 chunks done". This
+entry advances that: chunk 3 is complete, chunks 1-3 of 26 are ticked, and the e2e suite is now
+non-empty and green.
+
+### What landed
+
+`src/animal_classifier/catalog.py` (1033 lines) — the seven tables and four indexes of DESIGN.md
+§5.9 verbatim plus the `meta` schema-version table, `journal_mode=WAL`, `foreign_keys=ON`,
+`busy_timeout=10000`, `run_id = f"{started_at:%Y%m%dT%H%M%SZ}-{uuid4().hex[:8]}"`, and "newest run"
+defined once as `ORDER BY started_at DESC, run_id DESC LIMIT 1`.
+
+- **DEFECT 1 is structurally fixed.** `skipped` is written only through the module-level
+  `SKIPPED_UPSERT_SQL` constant (`ON CONFLICT(path) DO UPDATE SET reason/detail/run_id/seen_at`),
+  and `record_skip` is the only write path into the table. `sources` uses the same shape on `path`
+  via `SOURCES_UPSERT_SQL`. The constants are named so the gate `rg "INSERT INTO skipped" src/`
+  lands on a statement whose name says upsert.
+- **`replace_inference()`** publishes §5.9's re-inference transaction as one function in the fixed
+  order (delete candidates → delete boxes → insert boxes → insert candidates → `UPDATE images`),
+  inside `BEGIN IMMEDIATE`. It never touches `overrides` (append-only, I6), never rewrites
+  `first_seen`, and never sets `label_source`, so a human label survives `--reclassify`.
+- **`plan_disposition()`** is the full re-processing policy in one place: no row → process; `done` →
+  skipped unless `--reclassify` and skipped *before* the budget is consulted; `planned` /
+  `materializing` → re-processed; `failed` → **retried, consuming `--limit` budget**; `skipped` →
+  re-evaluated.
+- **Lock contention is a per-image outcome.** `do_write()` retries the whole transaction on
+  0.5/1/2/4/8 s and then raises the new `CatalogLockedError` (exit 4, added to `errors.py`), never a
+  fatal exit 1. `write_tx()` is the single-attempt form the GUI's re-tag uses to turn contention
+  into a fast 409. A read-only `Catalog` refuses to write at all.
+- **Fail-loud, no silent defaults:** `update_image`/`ensure_image` reject unknown column names
+  against `UPDATABLE_IMAGE_COLUMNS`; an update that matches no row raises rather than reporting
+  success; `start_run` refuses an empty `source_root`; duplicate box `idx` or candidate `rank` raise
+  before touching the DB; a schema version newer than this build refuses to open (exit 3).
+
+Two review follow-ups fixed ahead of their deadlines: `output_root` is now `Path.resolve()`d so a
+symlinked output root cannot evade `_guard_nesting`, and `pytest` moved to a PEP 735
+`[dependency-groups] dev` so `uv run --frozen pytest` resolves on a clean machine.
+
+`tests/e2e/test_cli_surface.py` lands **E6's CLI-surface leg** early (chunk 9 still owns E6's full
+form): every command's `--help` is asserted to offer no `min-box-area` / `min_area` / `area-floor` /
+`min-animal-area` / `min-box-frac` option, which is the executable guard on invariant I2.
+
+### Verified with real output (commands and results)
+
+```
+$ uv run --frozen pytest tests/e2e -v
+7 passed in 1.04s          (exit 0 — the suite was 0 collected / exit 5 before this commit)
+
+$ rg -n "INSERT INTO skipped" src/
+catalog.py:194 -> SKIPPED_UPSERT_SQL (the upsert); the other 3 hits are prose. No bare INSERT.
+
+$ uv run --frozen python /projects/sandbox/_verify_chunk3.py     # driver outside the repo
+pass1 disposition: process ; pass2 (same card, no --reclassify): skip_done
+row counts after 2 passes: images 2, sources 2, boxes 2, candidates 3, skipped 2, runs 2
+  -> the second run over the same card is a clean no-op: no IntegrityError, no duplicated rows
+pass3 with --reclassify: boxes 2, candidates 3 (unchanged — replace, not append)
+override survives re-inference: 1 ; boxes after an empty re-inference: 0
+failed-hash disposition: process (retry) ; done: skip_done ; done + --reclassify: process
+journal_mode: wal  foreign_keys: 1  busy_timeout: 10000
+tables: boxes candidates images meta overrides runs skipped sources
+indexes: idx_boxes_sha idx_boxes_sha_idx idx_images_label idx_sources_sha
+orphan source rejected by FK: FOREIGN KEY constraint failed
+unknown column (min_box_area) -> CatalogError exit=3
+update of a missing row -> CatalogError exit=3
+duplicate box idx -> CatalogError exit=3
+empty source_root -> CatalogError exit=3
+schema_version 99 -> CatalogError exit=3 ("refusing to touch it")
+write on a read-only catalog -> CatalogError ; read on it works
+missing DB opened read-only -> CatalogError naming the path
+contended write -> CatalogLockedError exit=4 (not a dead run)
+rolled-back transaction leaves 0 rows
+ALL CHUNK 3 CHECKS EXECUTED
+
+$ uv run --frozen python /projects/sandbox/_verify_symlink_guard.py
+ConfigError: output_root /…/card/DCIM/out is inside SOURCE /…/card   # symlink evasion now caught
+```
+
+The catalog driver is a throwaway script kept **outside** the repo on purpose: e2e tests only, and
+the catalog's real e2e proof is E2 (chunk 9) and E13's second-run and retry legs (chunk 10).
+
+### Blocked / not yet proven
+
+Nothing is blocked. Still unproven by an e2e test: everything the catalog exists to serve — a real
+`classify` run needs `scan.py`, `images.py`, `detect/`, `decide.py` and `materialize.py` (chunks
+5-8), so DEFECT 1's regression test arrives with E13 in chunk 10 as planned. 23 of 26 chunks remain,
+so `impl-status.json` `complete` stays `false`.
