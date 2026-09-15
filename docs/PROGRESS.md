@@ -158,3 +158,57 @@ becomes an optional extra, the rest get declared); COCO animal category ids conf
 `instances_val2017.json` annotation keys confirmed; 8 CPU cores / 30 GB RAM available.
 
 No implementation code written in this step.
+
+## 2026-09-15 15:47 UTC — design review (cold, adversarial) → **CHANGES_REQUESTED**
+
+Reviewed `docs/DESIGN.md` iteration 1 against `PLAN.md` and `RECON.md` without the authoring
+context. Findings: **2 HIGH, 15 MEDIUM, 8 NIT** → `docs/design-review.json` verdict
+`CHANGES_REQUESTED`; full narrative in `docs/design-review.md`.
+
+None of the hard blocking conditions fire. Checked and clear: no `min_box_area` or any absolute
+area floor under any name (`dominance_ratio` 1.6 is the only size gate, and §5.3 even keeps
+degenerate boxes in the count to avoid a back-door floor); e2e-only testing (`testpaths =
+["tests/e2e"]`, E1–E25, no `tests/unit`); no dependence on a RECON-blocked host; no writes to the
+source tree; no specified silent defaulting; and every required element present (MegaDetector v5a,
+own finetuned species model + real training subsystem + `train`, three bird providers, the closed
+label set, atomic writes, copy/`--link`/`--hardlink`, sha256 idempotent resume, SQLite catalog,
+FastAPI+vanilla-JS GUI on 127.0.0.1:8765 with re-tag that moves files, the six typer commands, the
+format policy).
+
+The two HIGHs:
+1. **Dependency contract is wrong and unreproducible.** `pyproject.toml` declares only
+   `typer>=0.12` and `uv.lock` has 9 packages, so §2.1's "131 packages, typer 0.25.1,
+   opencv-python-headless 5.0.0.93" is not verifiable here. A real resolution
+   (`uv pip compile --override … --python-version 3.12`) gives **115** packages, **typer 0.27.2**
+   (resolver picks `roboflow` 1.3.8, which has no `typer<0.26` cap — the cap is only in 1.4.2), and
+   `opencv-python-headless` **4.10.0.84**. Because `uv run` syncs the venv to the lock, the first
+   `uv sync` would replace the torch 2.14.0 / torchvision 0.29.0 environment that every RECON
+   verification was measured on. Fix: exact pins + committed lock + `uv sync --frozen`.
+2. **Degenerate dominant box has no defined label.** `species_or_unknown()` is called but never
+   defined, and real data hits it: 7 non-crowd COCO animal boxes are <2 px in one dimension.
+
+Verified rather than trusted (all re-measured this step): `md_v5a.0.0.pt` sha256
+`94e88fe9…` = the RECON constant; `efficientnet_b0_ra-3dd342df.pth` hash matches its filename;
+`letterbox`/`non_max_suppression`/`scale_boxes` import with the signatures §5.4 uses; the `uv`
+override really eliminates `opencv-python`; fastapi 0.141.1 / torch 2.14.0 / torchvision 0.29.0 /
+timm 1.0.29 as designed; COCO ids 16–25 correct; **2,666** usable animal instances (not ~2,700 —
+34 are `iscrowd=1`) over 1,016 images; at the design's own 1.6 gate the 471 multi-animal images
+split **235 dominant / 236 multiple**; CUB ships `bounding_boxes.txt` + `train_test_split.txt`.
+
+Newly discovered blocker for E16: **`pi-heif` cannot encode HEIF** (`im.save(format='HEIF')` →
+`KeyError: 'HEIF'`), and `data/raw` holds only JPEGs, so the HEIC fixture is unbuildable as
+specified. Full `pillow-heif` 1.1.1 (libheif 1.20.2) encodes and re-reads correctly — switch back
+to it, as `PLAN.md` originally said.
+
+Other MEDIUMs, in one line each: undefined `BirdResult`/`GpsPoint`/`top5` shapes; bird refinement
+unreachable in E8 because the trigger is the coarse head's top-1; E4 has no pass criterion and
+compares MegaDetector boxes to GT-derived expectations; no hold-out guarantee against COCO
+train/test leakage; E7/E10 thresholds unstated; `formats` key has no semantics; `source_root` has no
+provenance for `gui`/`verify`; a GUI re-tag can abort a running `classify` via the fatal
+`database is locked` rule; `--device cuda` with no GPU unspecified; `ebird_enrich` with no GPS and
+"down-rank" undefined; `eval --calibrate` mutates artifacts in place, breaking `model_id`
+traceability; `--ignore-overrides` state is ambiguous; §5.8 "reconciles" contradicts §8's
+report-only `verify`; `--limit` vs resume ambiguous.
+
+No implementation code written in this step. Next: design iteration 2 addressing the 17 HIGH/MEDIUM
+findings, then re-review.
