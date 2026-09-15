@@ -1,8 +1,8 @@
 {
   "complete": false,
   "total_items": 26,
-  "done_items": 4,
-  "current_chunk": "5. scan.py: read-only walk, one rule per skip reason, benign vs abnormal exit class",
+  "done_items": 5,
+  "current_chunk": "6. images.py: decode, the one coordinate frame, sha256, blur, crop",
   "plan_file": "docs/IMPL-PLAN.md",
   "spec_of_record": "docs/DESIGN.md",
   "branch": "feat/safari-classifier",
@@ -15,5 +15,5 @@
     "F_gui": "chunks 20-22",
     "G_loop_closers_polish": "chunks 23-26"
   },
-  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk. As of chunk 4 the suite is green (7 passed, exit 0) and the label space exists: slug()/LABEL_RE/RESERVED_LABELS plus the 10-row coco_animals.csv and 200-row cub200.csv, whose keys were verified to match CUB_200_2011.tgz's classes.txt exactly and in order. Chunk 5 must first act on FOLLOWUPS.md F1 (ensure_image's upsert would reset done rows to planned if the scanner calls it unconditionally)."
+  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk. As of chunk 5 the suite is still green (7 passed, exit 0 — the CLI-surface tests) and scan.py exists: all 11 scan-time skip reasons plus §5.2's two decode-time ones, partitioned benign/abnormal at import time so exit_code_for() cannot classify a new reason by accident. FOLLOWUPS F1 is closed ahead of the scanner: ensure_image now refreshes only caller-named columns, with status/run_id behind refresh_state=True, so a re-walk cannot demote a done row to planned. Chunk 6 (images.py) owns decode, the EXIF-transposed frame, sha256, blur and crop; chunk 9 is where scan.py first gets executable e2e coverage and chunk 12's E16 is where every skip reason does."
 }

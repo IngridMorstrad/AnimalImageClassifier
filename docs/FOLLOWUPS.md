@@ -61,7 +61,7 @@ The first two mediums above are fixed in this commit, ahead of their deadlines:
 Nothing below withholds approval. **F1 is the one to read before writing chunk 5** — it is a latent
 correctness trap rather than polish, though it has no caller today so nothing is broken yet.
 
-- [ ] **F1 — `ensure_image`'s upsert refreshes `status`/`run_id` and defaults to `planned`, which a
+- [x] **F1 — `ensure_image`'s upsert refreshes `status`/`run_id` and defaults to `planned`, which a
       naive scanner would use to reset `done` rows** (high priority — act on it in chunk 5,
       `scan.py`). `ensure_image` (`src/animal_classifier/catalog.py:~660-700`) puts `status` and
       `run_id` in its `ON CONFLICT DO UPDATE` list and defaults `status=Status.PLANNED`. If chunk 5's
@@ -73,6 +73,14 @@ correctness trap rather than polish, though it has no caller today so nothing is
       `ensure_image` outside `catalog.py` returns nothing). Fix: either consult `plan_disposition`
       before calling `ensure_image`, or make `status`/`run_id` refreshable only under an explicit
       opt-in argument. Chunk 9's idempotency e2e test must cover it either way.
+      **Closed in chunk 5**, before `scan.py` was written, by the second option *plus* a narrowing:
+      on a re-seen hash `ensure_image` now refreshes only the columns the caller actually named (plus
+      `last_updated`), and `status`/`run_id` join that list only under an explicit
+      `refresh_state=True`. Verified with a real catalog: a `done` row written under run `r1`, then
+      re-seen by `ensure_image(sha, run_id=r2)` with no opt-in, stayed `status=done run_id=r1
+      label=lion` and `plan_disposition` still returned `skip_done`; the same call with
+      `refresh_state=True` did move it to `planned`/`r2`, and `first_seen` was unchanged throughout.
+      Chunk 9's idempotency e2e test still owns the end-to-end assertion.
 
 - [ ] **F2 — `write_tx`'s unconditional `ROLLBACK` can mask the original exception** (low).
       `catalog.py:~470-480`: the `except BaseException` branch issues `ROLLBACK` before re-raising.

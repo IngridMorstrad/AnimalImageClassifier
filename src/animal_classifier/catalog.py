@@ -9,6 +9,10 @@ label precedence (invariant I6). Three properties of this module are load-bearin
   A bare ``INSERT INTO skipped`` raised ``IntegrityError`` on the second run over
   the same card — a reproduced defect, and the reason
   :func:`Catalog.record_skip` is the single sanctioned way to write that table.
+  Idempotency also has a caller-side half: :meth:`Catalog.ensure_image` refreshes
+  ``status``/``run_id`` on a re-seen hash only under an explicit
+  ``refresh_state=True``, so a scanner cannot demote a ``done`` row to ``planned``
+  merely by walking the card again (follow-up F1).
 * **Re-inference replaces, never appends.** :meth:`Catalog.replace_inference` is
   the whole per-image write as one ``BEGIN IMMEDIATE`` transaction in the fixed
   order of §5.9, so a re-classified hash cannot accumulate boxes. It never touches
@@ -663,6 +667,7 @@ class Catalog:
         *,
         run_id: str,
         status: Status = Status.PLANNED,
+        refresh_state: bool = False,
         now: datetime | None = None,
         **columns: Any,
     ) -> None:
@@ -672,6 +677,19 @@ class Catalog:
         the first pass keeps its discovery time through every ``--reclassify``.
         Must be called before :meth:`upsert_source` for the same hash, because
         ``sources.sha256`` is a foreign key into this table.
+
+        **On a re-seen hash only the columns the caller actually named are
+        refreshed** (plus ``last_updated``). ``status`` and ``run_id`` are needed to
+        insert a *new* row, but refreshing them on an existing row requires the
+        explicit ``refresh_state=True`` opt-in (follow-up F1). Without that opt-in a
+        scanner that calls this unconditionally for every hash on the card would
+        reset every ``done`` row to ``planned``; :func:`plan_disposition` reads
+        ``row.status`` alone, so the whole card would be re-processed and the
+        second-run-is-a-clean-no-op invariant would break from the *caller* side,
+        where the ``skipped`` upsert (DEFECT 1) cannot protect it. The pipeline
+        passes ``refresh_state=True`` exactly when it has decided to (re-)process
+        this hash in this run, i.e. after :func:`plan_disposition` returned
+        :attr:`Disposition.PROCESS`.
         """
         unknown = set(columns) - UPDATABLE_IMAGE_COLUMNS
         if unknown:
@@ -690,8 +708,11 @@ class Catalog:
         }
         names = list(values)
         placeholders = ", ".join(f":{name}" for name in names)
-        # first_seen is deliberately absent from the UPDATE list.
-        refreshed = [name for name in names if name not in {"sha256", "first_seen"}]
+        # sha256 is the conflict target and first_seen is write-once, so neither is
+        # ever in the UPDATE list; status/run_id join it only under refresh_state.
+        refreshed = [*columns, "last_updated"]
+        if refresh_state:
+            refreshed += ["status", "run_id"]
         assignments = ", ".join(f"{name} = excluded.{name}" for name in refreshed)
 
         def _upsert(conn: sqlite3.Connection) -> None:

@@ -127,7 +127,7 @@ no GUI yet.
       green; the real assertion lands in chunk 18's E8 label-directory check
       (`^[a-z][a-z0-9_]*$`, no leading digits, never `022_chuck_will_widow`).
 
-- [ ] 5. **`scan.py`: read-only walk, one rule per skip reason, benign vs abnormal exit class.**
+- [x] 5. **`scan.py`: read-only walk, one rule per skip reason, benign vs abnormal exit class.**
       `os.walk(source, followlinks=False)`, sorted for determinism, yielding `Candidate(path, size,
       mtime)` / `Skipped(path, reason)` for every reason in §5.1 with exactly the rule given there
       (`hidden`, `system_dir`, `unsupported_extension`, `format_disabled`, `video`,

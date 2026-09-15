@@ -1215,3 +1215,81 @@ re-run — `docs/test-report.md` at `6e448c2` records 7 passed / 0 failed / exit
 `scan.py` — `ensure_image`'s upsert refreshes `status`/`run_id` and defaults to `PLANNED`,
 so an unconditional call from the scanner would reset `done` rows to `planned` and defeat the
 second-run-is-a-no-op invariant from the caller side.
+
+## 2026-09-15 22:51 UTC — chunk 5: `scan.py` (read-only walk) + `FOLLOWUPS` F1 closed
+
+**Blocking finding B1 from `docs/build-review.json` was sequencing only** ("4 of 26 chunks,
+`complete: false`"), and the review explicitly said nothing in chunk 4's diff needed rework. So this
+iteration did what B1's `what_correct_looks_like` asked: act on F1 first, then land chunk 5.
+
+### F1 first (as instructed), in `catalog.py`
+
+`ensure_image` used to put **every** column in its `ON CONFLICT DO UPDATE` list, including
+`status` (default `planned`) and `run_id`. A scanner calling it once per hash on the card would have
+silently demoted every `done` row to `planned`; `plan_disposition` reads `row.status` alone, so the
+whole card would be re-processed and the second-run-is-a-clean-no-op invariant would break from the
+**caller** side, where DEFECT 1's `skipped` upsert cannot protect it.
+
+Fixed by narrowing the upsert twice over: on a re-seen hash it now refreshes **only the columns the
+caller actually named** (plus `last_updated`), and `status`/`run_id` join that list only under an
+explicit `refresh_state=True` — which the pipeline will pass exactly when `plan_disposition` has
+already returned `PROCESS`. `first_seen` stays out of the UPDATE list as before.
+
+### Chunk 5: `src/animal_classifier/scan.py`
+
+- `walk()` is `os.walk(followlinks=False)` with both lists sorted in place, so the visit order is
+  total and reproducible and `--limit` means something stable. `scan(config)` is the config-driven
+  entry and raises `ConfigError` when `source_root` is `None` rather than substituting the cwd (I7).
+- All **11** §5.1 scan-time reasons with exactly §5.1's rule, in one place (`_judge_file`), plus
+  §5.2's two decode-time reasons (`too_large_pixels`, `decode_error`) because they are written to the
+  same table and classified by the same split. **No `symlink_loop`** (`git grep`: 0 hits in `src/`).
+- **Design review finding 5** is `BENIGN_REASONS` / `ABNORMAL_REASONS` + `exit_code_for(reasons,
+  n_failed=)`. The two sets are checked at **import time** to partition the enum exactly, so a reason
+  added later without being classified raises instead of silently inheriting "benign" and turning a
+  partial run into exit 0.
+- `max_file_bytes` is applied from `st_size` before any decode, so it structurally never sees a box:
+  `dominance_ratio` remains the only size gate. `git grep -Ei "min_box_area|min_area|box_area|
+  area_floor|min_frac|…"` over `src/ scripts/ tests/` returns only `config.py:14` (a docstring
+  asserting the knob's absence) and the 6 parametrised CLI-surface guards.
+- Pruned directories are reported as **one** `Skipped` for the directory rather than one row per file
+  inside it, and their contents are never even listed. `system_dir` is tested before `hidden` (three
+  of the four system names also start with a dot, and the specific rule is the more useful record).
+  Symlinked **directories** are never descended under any flag, `--follow-source-symlinks` governing
+  symlinked *files* only.
+
+### Verified with real commands and real output
+
+`uv run --frozen python /projects/sandbox/_verify_chunk5.py` over a real temporary card
+(JPEG/PNG/TIFF/HEIC + `.mp4` + `.CR2` + `.txt` + 0-byte + a 700 MiB sparse file + in-card, escaping
+and dangling symlinks + `.Trashes`/`.thumbnails`/`__MACOSX`/`.hidden_dir`):
+
+- accepted exactly the 5 default-family files; `notes.txt → unsupported_extension`,
+  `clip.mp4 → video`, `raw.CR2 → raw_not_enabled`, `empty.jpg → zero_bytes`,
+  `huge.jpg → too_large (734003200 bytes exceeds max_file_bytes=536870912)`,
+  `.hidden.jpg → hidden`, `.Trashes`/`.thumbnails`/`__MACOSX` → `system_dir`,
+  `.hidden_dir → hidden`, both symlinks → `symlink`, `link_dir → symlink` ("never descended").
+- `exit_code_for`: **4** for that card (`zero_bytes` present); **0** for the benign set alone;
+  **4** for `[zero_bytes]`; **4** for `n_failed=1`. Determinism check across two walks: `True`.
+- `--formats jpeg` → `format_disabled` for exactly `phone.heic`, `plain.png`, `scan.tiff`;
+  `--raw` accepts `raw.CR2`; `--follow-source-symlinks` ingests `link_inside.jpg` and refuses
+  `link_outside.jpg` with `symlink_escape` naming the outside target; a dangling in-card link under
+  the same flag → `unreadable | FileNotFoundError`.
+- **over-cap file's bytes are never read**: `huge.jpg`'s `st_atime_ns` was identical before and
+  after a full walk (`True`).
+
+`uv run --frozen python /projects/sandbox/_verify_chunk5_f1.py` (F1, against a real catalog):
+`after first pass : done` (run `r1`) → `after re-walk : done run_id is r1: True label= lion`,
+`disposition : skip_done` → `after opt-in : planned run_id is r2: True`, `first_seen kept : True`.
+Also `scan(config)` with no `source_root` → `ConfigError: scan requires a source directory…`, and
+with a real card → one `Candidate`.
+
+`uv run --frozen pytest tests/e2e -v` → **7 passed, exit 0** (unchanged; the suite is still the CLI
+surface).
+
+### Blocked / not done
+
+Nothing blocked. `unreadable` could not be provoked through a `0o000` directory because the sandbox
+runs as **root** (chmod does not stop root) — it was proved through the dangling-symlink path
+instead, and chunk 12's E16 will cover the rest. `scan.py` still has **no e2e coverage**: no entry
+point reaches it until `classify` is wired in chunk 9 (same shape as F7/F12). Next: chunk 6,
+`images.py`.
