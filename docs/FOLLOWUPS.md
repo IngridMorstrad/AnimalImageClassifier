@@ -154,3 +154,52 @@ before chunk 5.
       sentence asserts that no such knob exists; it is the documented absence of the gate, not the
       gate. Recorded only so a future grep-based audit of the "no area floor" invariant does not
       misread the guard as a violation.
+
+## From the chunk-5 gate review (`scan.py`, 2026-09-15 23:00 UTC)
+
+None of F15–F20 withheld approval; the only blocking finding was the progress counter (5/26).
+
+- [ ] **F15 — the exit class for benign skips deviates from `DESIGN.md:1211`'s literal wording**
+      (medium — resolve it in an assertion, not in prose). §10.1 says "`4` completed with per-image
+      failures **or skips**", while `scan.py`'s `exit_code_for` returns 0 when only `BENIGN_REASONS`
+      occurred. The deviation is correct: `docs/design-review.md:115` finding 5 is titled "exit code
+      4 vs 0 for benign skips is self-contradictory, and E2/E16 cannot both pass", and §10.1's own
+      table marks `video`/`format_disabled`/`too_large`/`symlink` as "not an error"/`DEBUG`. A card
+      full of videos is a successful run. Action: E2 must assert exit **0** on a card whose only
+      skips are benign, and E16 must assert exit **4** because its fixture contains `zero_bytes`,
+      a truncated JPEG and `symlink_escape` — so the semantics live in a test, not just in a
+      module docstring.
+
+- [ ] **F16 — `_judge_file`'s rule order is not literally §5.1's table order** (nit, docstring only).
+      `video` and `raw_not_enabled` are tested before `unsupported_extension`/`format_disabled`
+      (`scan.py:341-356`). This is the better behaviour — `.mp4` and `.cr2` belong to no `formats`
+      family, so the table's order would record the *less* specific `unsupported_extension` — and
+      both candidates are benign, so the exit class is identical. Only the module docstring's claim
+      of "the fixed precedence order documented there" overstates the correspondence.
+
+- [ ] **F17 — `scan.py` has no executable proof at this commit** (informational, self-resolving at
+      chunks 9 and 12; same shape as F7/F12). None of the 13 skip reasons, the directory pruning,
+      the `onerror` drain ordering, or `exit_code_for` is reachable from a `--help` invocation, so
+      the 7 green tests do not touch this chunk's subject at all. Its correctness currently rests on
+      the gate review's reading plus `PROGRESS.md`'s ad-hoc runs. E6's full form (chunk 9) and E16
+      (chunk 12) are what convert this into regression coverage.
+
+- [ ] **F18 — an unreadable source *root* exits 4, where §10.1 wants a fatal 3** (medium — do it in
+      chunk 9). `walk()` checks `root.is_dir()` (`scan.py:239`) but not readability, so a card root
+      that exists and is a directory yet cannot be listed arrives through `_on_error` as a single
+      `Skipped(unreadable)` — abnormal, exit 4. §10.1's row reads "source missing / not a dir /
+      **not readable** → fatal, exit 3". Nothing is silent either way, so this is an exit-code
+      nuance, not a data risk. Fix where `classify` wires the exit codes: probe the root once
+      up front and raise `ConfigError`.
+
+- [ ] **F19 — the `pending_errors` drain is duplicated and O(n)** (nit). `while pending_errors:
+      yield pending_errors.pop(0)` appears at `scan.py:266-268` and again at `281-282`. A `deque`,
+      or a `yield from list(...)` followed by `clear()`, says the same thing once. Keep the comment
+      explaining *why* the drain sits at the top of the loop body (it preserves walk order) —
+      that is the non-obvious part.
+
+- [ ] **F20 — two spellings of one predicate** (nit). `Skipped.benign` (property) and module-level
+      `is_benign()` both answer "does this reason leave the run successful?", and the property has
+      no caller today. Keep `is_benign()`: its string-accepting form is load-bearing, because it
+      classifies a reason read back out of the catalog and raises `ValueError` on an unrecognised
+      value rather than defaulting to benign.

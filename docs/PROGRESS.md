@@ -1346,3 +1346,40 @@ exercised. `scan.py`, `catalog.py` and `taxonomy/labels.py` have **no e2e covera
 they are evidenced so far only by the ad-hoc verification scripts logged above. Per the plan that
 closes in chunk 9 (E6 full form, first executable path through `scan.py`), chunk 12 (E16, every skip
 reason) and chunk 18 (E8). Next: chunk 6, `images.py`.
+
+---
+
+## 2026-09-15 23:00 UTC — gate review of chunk 5 (`scan.py`) — **CHANGES_REQUESTED, 1 blocking finding**
+
+**Verdict:** `CHANGES_REQUESTED` · **blocking findings: 1** · non-blocking observations: 6 (F15–F20,
+appended to `docs/FOLLOWUPS.md`).
+
+Reviewed `49af62f..HEAD` — `4fdc624` (`scan.py`, 392 new lines; `catalog.py` +25/−4) and `bc7d401`
+(the test report). The one blocking finding is the **progress counter, not a defect**:
+`docs/impl-status.json` has `complete: false`, `done_items: 5` of `total_items: 26`, so approval is
+contractually unavailable. Nothing in this iteration's diff needs rework.
+
+**What the review confirmed.** All 11 of §5.1's scan-time skip reasons plus §5.2's two decode-time
+ones are present with the rule §5.1 gives each; the module is structurally read-only (`os.walk`,
+`os.stat`, `is_symlink`, `realpath` and nothing else) and prunes refused directories rather than
+listing them; the benign/abnormal partition is enforced **at import time**, so a newly added reason
+cannot silently inherit "benign" and turn a partial run into exit 0; `scan()` and `walk()` raise
+`ConfigError` rather than substituting a default source. **FOLLOWUPS F1 is genuinely closed**:
+`ensure_image` now refreshes only caller-named columns plus `last_updated`, with `status`/`run_id`
+behind `refresh_state=True`; `status` and `run_id` are explicit keyword parameters so they can never
+arrive through `**columns`, which rules out a duplicate `SET` assignment, and `rg` confirmed no
+caller of `ensure_image` exists outside `catalog.py`, so the narrowing broke nothing.
+
+**No `min_box_area`, no absolute box-area floor.** `max_file_bytes` is a whole-file `st_size` cap
+applied before any decode — exactly how DESIGN.md:295 defines it — so it structurally never sees a
+detection box. `dominance_ratio` is still the only size gate.
+
+**Evidence used.** The suite was **not** re-run, per the step's instruction. `docs/test-report.md`'s
+verbatim capture at `4fdc624` (7 collected / 7 passed / 0 failed / exit 0, reproduced with `-q`) plus
+the diff, with two narrow read-only spot-checks: `rg` for `ensure_image` callers, and `rg` in
+`docs/design-review.md` to verify the finding number `scan.py` cites (line 115, finding 5). Test
+hygiene clean: no unit tests, nothing under `tests/` outside `tests/e2e/`, nothing deleted to make
+the suite green. `scan.py` itself has no e2e coverage yet (recorded as F17) — chunk 9's E6 and
+chunk 12's E16 are where it gets some.
+
+**Next:** chunk 6, `images.py` (decode, the one EXIF-transposed coordinate frame, sha256, blur, crop).
