@@ -212,3 +212,56 @@ report-only `verify`; `--limit` vs resume ambiguous.
 
 No implementation code written in this step. Next: design iteration 2 addressing the 17 HIGH/MEDIUM
 findings, then re-review.
+
+## 2026-09-15 16:14 UTC — design step — docs/DESIGN.md iteration 2 (all 25 review findings resolved)
+
+Rewrote `docs/DESIGN.md` (743 → 1,101 lines) against `docs/design-review.json`. Every finding is
+resolved and §14 maps all 25 (2 HIGH / 15 MEDIUM / 8 NIT) to the section that fixes it. I re-measured
+the load-bearing claims rather than trusting either the old design or the review — three of the
+review's own suggested fixes were wrong or unbuildable and are adapted with the measurement that
+proves it:
+
+1. **Finding 1's pin set is unsatisfiable.** Measured: `roboflow==1.3.8` pins
+   `opencv-python-headless==4.10.0.84` *exactly*, and `roboflow` 1.4.2 pins `typer<0.26` — so
+   "`roboflow==1.3.8` + `opencv-python-headless==5.0.0.93` + `typer==0.27.2`" cannot resolve
+   (`uv` says unsatisfiable). Fix taken instead: pin the RECON-verified versions and override
+   `roboflow` **and** `sahi` out of the resolution alongside `opencv-python`. Verified by probe that
+   `import yolov5`, `letterbox`, `non_max_suppression`, `scale_boxes`, the `models`/`utils` alias
+   shim, the MegaDetector load and a 640×640 forward (`(1, 25500, 8)`,
+   `names=['animal','person','vehicle']`) all work with `roboflow`+`sahi` blocked. The pinned set
+   resolves to **109 packages** with no `opencv-python`/`roboflow`/`sahi` and the exact verified
+   `torch 2.14.0 / torchvision 0.29.0 / timm 1.0.29 / numpy 2.5.3 / opencv-python-headless 5.0.0.93`.
+   `uv.lock` committed + `uv sync --frozen` mandatory; moving a modelling pin forces a re-run of the
+   three RECON probes.
+2. **Findings 5 + 6 conflict on real data.** Requiring e2e assertion images to be val-split (finding 6,
+   anti-leakage) leaves only **22** COCO images with GT dominance ratio > 3.0 — a 40-image frozen list
+   (finding 5) is unbuildable. E4 therefore freezes **20 + 20** val-bucket images with ≥ 16/20
+   aggregate thresholds. Also refined `split_for()` to key on the file **basename**, so the split is
+   machine-independent and every crop of one photo stays on one side of it.
+3. **Finding 8 confirmed, version corrected.** On py3.12 + pillow 12.3.0 the resolvable
+   `pillow-heif` is **1.7.0** (libheif 1.23.3), not 1.1.1; verified `save(format="HEIF")` +
+   re-open round-trip, so the E16 HEIC fixture is buildable. `pillow==12.3.0` is real (latest);
+   `pi-heif` stays rejected for its missing encoder.
+
+Other numbers re-measured from `instances_val2017.json` and written into the design: **2,666** usable
+animal instances (2,700 − 34 `iscrowd`) over 1,016 images; per-class counts with `bear` at 71 (11 val)
+flagged as the limit on per-class claims; **7** sub-2px boxes, smallest `area_frac` 0.00001243;
+471 multi-animal images → **235 dominant / 236 multiple** at the 1.6 gate; E7's 7-class subset =
+**1,625 train / 349 val** crops (chance 0.143, majority baseline 0.229 → asserted `val_top1 >= 0.55`);
+24 val-split single-animal images available for E7's species-identity list (20 used, ≥ 14 must hit).
+
+Substantive design additions: `species_or_unknown()` defined and total (degenerate winner → `unknown`,
+new test E26); `Candidate`/`Prediction`/`BirdResult`/`GpsPoint` dataclasses plus the bird merge rule
+and `model_id = "<species>+<bird>"`; bird trigger widened to top-3 Aves plus a `--force-bird-head`
+diagnostic; `formats` given real semantics (`format_disabled` skip reason, repeatable `--formats`,
+fatal on `raw`); `runs.source_root NOT NULL` as the provenance for `gui`/`verify` and the GUI's
+source-serving mode deleted (409 for `--dry-run` rows); read-only GUI connections + 409 on catalog
+contention so a re-tag can never abort a 2.8 h run; `--device cuda` without a CUDA device fatal;
+`ebird_enrich` no-GPS path and the 0.25 down-rank multiplier specified; calibration writes a **new**
+artifact (`+calN`, new invariant I8); `--ignore-overrides` suppresses without deleting; `verify --fix`
+added as the only reconciler; `--limit` defined as new-work budget; `species_rank` threaded through
+artifact → catalog → GUI; label-dir regex with tool-internal entries ignored; `sources` upsert rule;
+blur metric downscale-only with `blur_ref_edge`; link-mode `readlink` comparison before hashing.
+
+Still zero implementation code. Test count is now **E1–E26, end-to-end only**. Next: design re-review,
+then implementation starting with the §2.1 dependency contract and the three probe re-runs.
