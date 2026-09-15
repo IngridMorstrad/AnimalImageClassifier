@@ -1184,3 +1184,34 @@ nothing, so there is no unit-test file to flag; `tests/e2e/` holds only `conftes
 (`scan.py`) must first act on `FOLLOWUPS.md` F1 — `ensure_image` refreshes `status`/`run_id` and
 defaults to `planned`, so an unconditional call from the new scanner would reset `done` rows to
 `planned`. That is a `code`-step concern, not a testing blocker.
+
+## 2026-09-15 22:42 UTC — gate review of chunk 4 (`taxonomy/`): CHANGES_REQUESTED, 1 blocking finding
+
+**Range:** `b8ec047..HEAD` (`6e448c2` taxonomy/, `7ada6a0` test report). **Verdict:**
+CHANGES_REQUESTED — **1 blocking finding**, sequencing only: `docs/impl-status.json` has
+`complete: false` at 4 of 26 chunks. **Nothing in this iteration's diff needs to be undone.**
+
+Written: `docs/build-review.md` (narrative), `docs/build-review.json` (verdict contract),
+`docs/FOLLOWUPS.md` (+F8-F14).
+
+What the review established, from the diff plus the captured test evidence (the suite was **not**
+re-run — `docs/test-report.md` at `6e448c2` records 7 passed / 0 failed / exit 0 verbatim):
+
+- **DEFECT 2 is fixed, and verified empirically rather than by source reading.** One narrow
+  spot-check loaded the real shipped tables through the real code: `chuck_will_widow →
+  chuck_wills_widow`, `artic_tern → arctic_tern`, `brewer_blackbird → brewers_blackbird`; all
+  **210** labels across both tables match `LABEL_RE`, none is digit-prefixed, none collides with a
+  reserved outcome; `cub_key_from_dirname('022.Chuck_will_Widow') → 'chuck_will_widow'` (a key,
+  never a directory); a missing key raises `ConfigError`.
+- **No `min_box_area` / no absolute area floor** in code or config. `dominance_ratio` is still
+  the only size gate, still guarded executably by the 6 parametrised CLI tests.
+- **Test hygiene clean:** no unit tests, nothing outside `tests/e2e/`, nothing deleted to make the
+  suite green, real captured output for every green claim.
+- **The `.gitignore` `data/` → `/data/` fix is a real data-loss catch** — the unanchored pattern
+  matched `taxonomy/data/`, and hatchling honours VCS ignore files, so the CSVs would have been
+  dropped from both `git add -A` and the wheel.
+
+**Next action for chunk 5 (unchanged, now overdue):** act on `FOLLOWUPS.md` **F1** before writing
+`scan.py` — `ensure_image`'s upsert refreshes `status`/`run_id` and defaults to `PLANNED`,
+so an unconditional call from the scanner would reset `done` rows to `planned` and defeat the
+second-run-is-a-no-op invariant from the caller side.

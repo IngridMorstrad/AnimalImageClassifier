@@ -1,163 +1,146 @@
-# Build review — iteration 2 (2026-09-15 22:17 UTC)
+# Build review — iteration 3 (2026-09-15 22:40 UTC)
 
-**Range reviewed:** `f682087..HEAD` (`c87a690` catalog.py, `6377ac8` test report) on
+**Range reviewed:** `b8ec047..HEAD` — `6e448c2` (`taxonomy/`) and `7ada6a0` (test report) on
 `feat/safari-classifier`.
 **Spec of record:** `docs/DESIGN.md` (frozen; not reviewed, not edited).
 **Verdict:** CHANGES_REQUESTED — **1 blocking finding**, and it is the same sequencing finding as
-iteration 1: `docs/impl-status.json` has `complete: false` at 3 of 26 chunks. Nothing that landed in
-this iteration needs to be undone.
+iterations 1 and 2: `docs/impl-status.json` has `complete: false` at 4 of 26 chunks. **Nothing that
+landed in this iteration needs to be undone or revisited.** The code that landed is correct, and the
+central defect this chunk existed to fix is now fixed and empirically demonstrated.
 
 ## 1. What landed
 
 | Area | Change |
 |---|---|
-| `src/animal_classifier/catalog.py` | New, 1038 lines. Full §5.9 catalog: schema, statuses, upserts, run lifecycle, `replace_inference`, overrides, lock backoff. |
-| `src/animal_classifier/errors.py` | New `CatalogLockedError` (exit 4, `EXIT_PARTIAL`), deliberately not a `CatalogError`. |
-| `src/animal_classifier/config.py` | `_resolve_without_requiring_existence` switched from `os.path.abspath` to `Path.resolve()`. |
-| `pyproject.toml`, `uv.lock` | `pytest==9.1.1` moved from `[project.optional-dependencies]` to PEP 735 `[dependency-groups]`. |
-| `tests/e2e/conftest.py`, `tests/e2e/test_cli_surface.py` | New. E6's CLI-surface leg, 7 tests. |
-| `docs/*` | test-report, PROGRESS, FOLLOWUPS, impl-status, IMPL-PLAN checkbox. |
+| `src/animal_classifier/taxonomy/labels.py` | New, 446 lines. `slug()`, `LABEL_RE`, `RESERVED_LABELS`, `validate_label()`, `cub_key_from_dirname()`, `Rank`, `Taxon`, `TaxonTable`, `load_table()`, and the cached `coco_animals()` / `cub200()` / `merged()` accessors. |
+| `src/animal_classifier/taxonomy/__init__.py` | New, 55 lines. Re-exports the whole surface; documents that this is the import point, not `.labels`. |
+| `src/animal_classifier/taxonomy/data/coco_animals.csv` | New, 10 rows + header. |
+| `src/animal_classifier/taxonomy/data/cub200.csv` | New, 200 rows + header. |
+| `.gitignore` | `data/` → `/data/`. Anchored so the unanchored pattern stops matching `src/animal_classifier/taxonomy/data/`. |
+| `pyproject.toml` | `[tool.hatch.build.targets.wheel] artifacts = [".../taxonomy/data/*.csv"]`. |
+| `docs/*` | test-report (real run), PROGRESS (+181 lines), impl-status (`done_items` 3 → 4), IMPL-PLAN chunk 4 checked. |
 
-Both mediums that iteration 1 filed as follow-ups were **fixed early**, ahead of their stated
-deadlines (chunk 11 and chunk 9 respectively). That is the right response to a follow-up list and is
-worth recording as a positive.
+## 2. Does it match the frozen design and the user's stated intent?
 
-## 2. Match against the frozen design and the user's stated intent
+Yes, on every point I could check against the diff.
 
-**Invariant I2 — no absolute box-area floor (the user's explicit instruction).** Clean, and now for
-the first time *executably* guarded. `grep -rniE "min_box_area|min_area|area_floor|min_animal_area|min_box_frac"`
-over `src/` and `tests/` matches only (a) prose asserting the absence at `config.py:14`, and (b) the
-denylist inside `tests/e2e/test_cli_surface.py`. `grep -rnE "area_frac\s*[<>]"` returns **zero
-matches** — no box area is compared to anything. `catalog.py` stores `area_frac` on `boxes` and its
-`BoxWrite` docstring states the column exists for the GUI and the dominance audit trail and "is
-never compared against a floor". `dominance_ratio` remains the only size gate.
+**DEFECT 2 — raw / digit-prefixed class names as output directories — is fixed.** This is the
+category the gate calls out explicitly (`022_chuck_will_widow` must never be a folder), so I spent my
+one permitted spot-check here rather than accepting a source reading. Loading both real tables
+through the real code:
 
-**DEFECT 1 — second run over the same tree must be a clean no-op.** The fix is present and is
-structured so it cannot be quietly undone: `SKIPPED_UPSERT_SQL` (`catalog.py:189-197`) is
-`INSERT INTO skipped(...) ON CONFLICT(path) DO UPDATE SET ...`, `record_skip` (`catalog.py:795-822`)
-is documented as the only sanctioned write path into that table, and `grep -rn "INSERT INTO skipped" src/`
-finds exactly one statement — the named upsert constant. `sources` gets the same treatment via
-`SOURCES_UPSERT_SQL`. `replace_inference` (`catalog.py:~860-970`) deletes `candidates` then `boxes`
-for the hash before re-inserting, inside one `BEGIN IMMEDIATE`, so a re-classified hash cannot
-accumulate boxes. `ensure_image` excludes `first_seen` from its `DO UPDATE` list. This is the right
-shape. It is **not yet proven by execution** — see §3 and follow-up F1.
+```
+cub rows 200 coco rows 10
+chuck_will_widow -> chuck_wills_widow
+artic_tern       -> arctic_tern
+brewer_blackbird -> brewers_blackbird
+forsters_tern    -> forsters_tern
+invalid/digit-prefixed/reserved labels: []
+cub_key_from_dirname('022.Chuck_will_Widow') -> chuck_will_widow
+merged size 210
+label_for('nope') raises ConfigError
+```
 
-**Read-only source card.** Nothing in this diff writes to a source path. `Catalog.open` only ever
-creates `path.parent` for the catalog file, which lives under `output_root`. The `config.py` change
-strengthens this: `output_root` is now symlink-resolved, so an `output_root` that is itself a symlink
-into the card is caught by `_guard_nesting` instead of sailing through three textual checks — the
-exact evasion iteration 1 flagged. FOLLOWUPS.md records a real verification run of the rejection.
+That is the exact transformation the gate names, produced by the shipped tables: the ordinal prefix
+is stripped into a *key*, and the *label* comes from the authoritative display name. All 210 labels
+across both tables satisfy `LABEL_RE`, none begins with a digit, none collides with a reserved
+outcome. CUB's own misspelling (`141.Artic_Tern`) is preserved in the key — correct, that is what
+the dataset is keyed by — while the folder is corrected to `arctic_tern`. The key/label split in
+`labels.py:20-45` is exactly the right shape for this, and `_reject_raw_dataset_id`
+(`labels.py:~300`) turns a future regression into a startup `ConfigError` rather than a directory on
+disk.
 
-**Fail loud, never substitute a default for a missing required value (I7).** Holds. `start_run`
-rejects an empty `source_root` with a message naming why it matters (`catalog.py:~540-548`) rather
-than storing `""` into a `NOT NULL` column. `ensure_image` and `update_image` validate keyword names
-against the `UPDATABLE_IMAGE_COLUMNS` allowlist and raise on an unknown column instead of updating
-nothing. `update_image` and `replace_inference` both check `cursor.rowcount == 0` and raise, so a
-write against a missing row is an error, not a silent zero-row success. `_check_schema_version`
-refuses a newer schema untouched, refuses a non-numeric version, and refuses a read-only open of a
-file with no `schema_version` row rather than presenting an empty database. The one default in the
-module (`status=Status.PLANNED`) is a documented default for a new row, not a stand-in for a value
-the caller failed to supply.
+**No `min_box_area` and no absolute area floor.** `git grep` across all tracked files for ten
+spellings of an area floor returns exactly one hit outside the docs: `config.py:14`, a docstring
+sentence asserting that no such knob exists. That is the documented *absence* of the gate, not the
+gate. `dominance_ratio` remains the only size gate. The 6 parametrised CLI-surface tests continue to
+assert this executably.
 
-**Label precedence (I6).** `replace_inference` never touches `overrides` and never sets
-`label_source`, so a human label survives `--reclassify` unless a caller explicitly demotes it.
-`insert_override` only appends; nothing in the module deletes or rewrites an override row.
+**Fail-loud on missing required values (I7) is honoured, not eroded.** `TaxonTable.__getitem__`
+raises `ConfigError` naming the file and the fix; `label_for` / `common_for` / `rank_for` all route
+through it, so a missing class key can never become a placeholder directory. `slug()` raises rather
+than returning a sanitized guess. `load_table` validates the header exactly, rejects blank rows,
+wrong field counts, empty `key`, empty `common`, empty `class`, an unknown `rank`, duplicate keys,
+and — the check I most wanted to see — **duplicate labels**, which would otherwise silently merge two
+species into one folder with no later stage able to notice (`labels.py:~395`). The one field allowed
+to be absent, `scientific`, is genuinely optional in the contract and is stored as `None`, with the
+reasoning recorded in the module docstring. That is an honest absence, not a substituted default.
 
-**Lock contention.** `do_write` retries 0.5/1/2/4/8 s and then raises `CatalogLockedError`, which
-carries `exit_code = EXIT_PARTIAL` (4), so contention is a per-image outcome and not a dead run —
-matching §5.9. `write_tx` takes the lock up front with `BEGIN IMMEDIATE`, so a contended writer fails
-before doing partial work, which is what makes retrying the whole body sound.
+**The `.gitignore` / `hatchling` fix is a real data-loss catch, not bookkeeping.** An unanchored
+`data/` matched `src/animal_classifier/taxonomy/data/`, and hatchling honours VCS ignore files when
+selecting wheel contents. Left alone, the CSVs would have been dropped from both `git add -A` and
+the wheel, and since no taxonomy API is reachable (§13.3) the installed package would have failed at
+runtime with no local reproduction. The commit anchors the pattern *and* names the artifacts
+explicitly — belt and braces, correct.
 
-**e2e-only tests (the user's explicit instruction).** Holds. `tests/` contains exactly two `.py`
-files, both under `tests/e2e/`; `pyproject.toml` pins `testpaths = ["tests/e2e"]`. The new tests
-drive the installed `animal-classifier` console script as a real subprocess via `run_cli` and assert
-on observable stdout/exit code — genuinely end-to-end, not a unit test in an e2e directory. The
-`cli_path` fixture raises rather than falling back to `python -m`, which would silently test a
-different surface.
+## 3. What the real test output proves
 
-**No raw or digit-prefixed class names, no low-confidence guess filed as a species, atomic writes,
-`--link`/`--hardlink`/`--dry-run`/`--reclassify` contract.** Not yet reachable: `taxonomy/` is
-chunk 4, `materialize.py` is chunk 11, the species and bird heads are chunks 15-19. No code in this
-diff creates an output directory or writes an image. Nothing here pre-violates any of them.
+`docs/test-report.md` captures a verbatim, untruncated `uv run pytest tests/e2e -v` at `6e448c2`:
+**7 collected, 7 passed, 0 failed, 0 errored, 0 skipped, exit code 0**, 0.94s. No test was claimed
+green without captured output.
 
-## 3. What the real test output proves — and what it does not
+The report is also honest about its own reach, which I checked rather than took on faith:
 
-`docs/test-report.md` captures a verbatim run of `uv run pytest tests/e2e -v`: **7 collected, 7
-passed, 0 failed, 0 errored, exit code 0**, up from the previous run's exit 5 on an empty suite. I did
-not re-run the suite.
+- All 7 tests are `--help` assertions from one file, `tests/e2e/test_cli_surface.py`. They prove the
+  CLI-surface leg of E6 and the standing "no area floor" invariant. They exercise no detection, no
+  dominance rule, no materialization, no catalog, no GUI, no bird provider.
+- **`taxonomy/` has zero e2e coverage at this commit** — `catalog.py` and `taxonomy/labels.py` are
+  both unreachable from a `--help` invocation. The report says so explicitly. Recorded as F12 below;
+  E8's label-directory assertion is scheduled for chunk 18, and my spot-check above is a review
+  artifact, not a regression test.
+- No test exists anywhere outside `tests/e2e/`. I confirmed independently: `find tests -name '*.py'
+  -not -path 'tests/e2e/*'` returns nothing; the tree holds exactly `conftest.py` and
+  `test_cli_surface.py`; `pyproject.toml` pins `testpaths = ["tests/e2e"]`. No unit tests. Nothing
+  was deleted to make the suite green.
 
-What that output proves: the CLI exists, `--help` exits 0 and names all six commands, and no
-command's `--help` offers any of 10 spellings of an area floor. That is a green executable guard on
-invariant I2 — the user's most explicit standing requirement.
+## 4. Blocking findings (1)
 
-What it does **not** prove, and the report says so itself in as many words: nothing about detection,
-the dominance rule, materialization, **the catalog**, the GUI, training, or the bird providers. Every
-correctness claim in §2 about `catalog.py` — including the DEFECT 1 idempotency fix, the strongest
-claim in this iteration — rests on reading the source, not on observed behaviour. The report's
-honesty about its own scope is correct behaviour and is not treated as a defect; the consequence is
-simply that the fix stays unproven until the first `classify` e2e test lands (chunk 9).
+### B1 — Implementation is 4 of 26 chunks complete; `impl-status.json` has `complete == false`
 
-The report also states, verifiably from `docs/impl-status.json` rather than inferred, `done_items: 3`
-of `total_items: 26`. `grep -cE "^- \[x\]" docs/IMPL-PLAN.md` returns 3 and `^- \[ \]` returns 23,
-so the checklist and the status file agree.
+**File:** `docs/impl-status.json`
 
-## 4. Blocking findings
+This is a sequencing finding, carried forward. `complete: false`, `done_items: 4`,
+`total_items: 26`, `current_chunk: "5. scan.py: ..."`; `IMPL-PLAN.md` checkbox counts agree (4
+checked, 22 unchecked). Approval requires `complete == true`, so the loop must keep going. **No part
+of this iteration's diff is implicated** — `labels.py`, the two CSVs, `.gitignore` and
+`pyproject.toml` are all correct as written.
 
-### B1 — implementation is 3 of 26 chunks complete; `impl-status.json` has `complete: false`
+Behavioural gates still entirely unproven by executable tests: E6's full form (a real `classify`
+over the fixture card proving `dominance_ratio` decides alone) at chunk 9; the
+second-run-is-a-clean-no-op test that finally exercises `record_skip`'s `ON CONFLICT(path)` upsert
+end to end (chunk 9); `materialize.py`'s atomic writes and the
+`--link` / `--hardlink` / `--dry-run` / `--reclassify` contract (chunk 11); E22 fail-loud config;
+the species and bird heads at chunks 15-19, where a low-confidence result must file as `unknown`
+rather than a guessed species, and where E8 must assert the human-readable output directories that
+this chunk made possible.
 
-- **File:** `docs/impl-status.json` (`complete: false`, `done_items: 3`, `total_items: 26`,
-  `current_chunk: "4. taxonomy/: slug(), LABEL_RE, RESERVED_LABELS and the static name tables"`).
-- **Why blocking:** approval requires `complete == true`. 23 of 26 plan chunks are unwritten and the
-  e2e suite covers only the CLI surface, so none of the design's behavioural guarantees — including
-  the DEFECT 1 idempotency fix that landed this iteration — has executable proof.
-- **Not a defect in what landed.** Nothing in `catalog.py`, `errors.py`, `config.py`,
-  `pyproject.toml` or `tests/e2e/` needs to be undone or revisited.
-- **What correct looks like:** continue from chunk 4 through chunk 26 of `docs/IMPL-PLAN.md`,
-  updating `done_items` and `current_chunk` after each, and set `complete: true` only when all 26
-  checklist items are checked and `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with
-  real captured output in `docs/test-report.md`. Gates still entirely unproven: chunk 9's E6 full
-  form (a real `classify` proving the dominance rule decides alone) plus E22 (fail-loud config) and
-  the second-run-is-a-no-op test that finally exercises `record_skip`'s upsert; chunk 11's
-  `materialize.py` with atomic writes and the `--link`/`--hardlink`/`--dry-run`/`--reclassify`
-  contract; chunks 15-19, where a low-confidence result must file as `unknown` rather than a guessed
-  species and output directories must be human-readable slugs (`chuck_wills_widow`, never
-  `022_chuck_will_widow`).
+**Immediate next action, unchanged and now overdue:** before writing `scan.py`, act on `FOLLOWUPS.md`
+**F1**. `ensure_image`'s upsert refreshes `status`/`run_id` and defaults to `PLANNED`, so an
+unconditional call from the new scanner would reset `done` rows to `planned` and defeat the
+second-run-is-a-no-op invariant from the caller side, where DEFECT 1's upsert cannot protect it.
 
 ## 5. Non-blocking observations
 
-All of these are appended to `docs/FOLLOWUPS.md`. Per the anti-stall rule none of them withholds
-approval; B1 is the sole reason the verdict is not APPROVED. F1 is the one worth reading before
-writing chunk 5 — it is a latent correctness trap, not polish, but it has no caller today and so
-nothing observable is broken.
+All appended to `docs/FOLLOWUPS.md` as F8-F14. None withholds approval; none needs attention before
+chunk 5.
 
-- **F1 (high priority, act on it in chunk 5 — `scan.py`).** `ensure_image` (`catalog.py:~660-700`)
-  upserts with `status` and `run_id` in its `DO UPDATE` list and defaults `status=Status.PLANNED`. If
-  chunk 5's scanner calls `ensure_image` unconditionally for every hash it walks, a second run over
-  the same card silently resets every `done` row to `planned`, and `plan_disposition` — which decides
-  `SKIP_DONE` purely from `row.status` — would then re-process the whole card. That is precisely the
-  "second run must be a clean no-op" invariant, defeated from the caller side rather than by the
-  `skipped` table. There is no caller yet (`grep` for `ensure_image` outside `catalog.py` returns
-  nothing), so nothing is broken now. Either have the scanner consult `plan_disposition` before
-  calling `ensure_image`, or make `status`/`run_id` refreshable only on an explicit opt-in argument.
-  Chunk 9's idempotency e2e test must cover it either way.
-- **F2 (low).** `write_tx`'s `except` branch issues `ROLLBACK` unconditionally
-  (`catalog.py:~470-480`). If SQLite has already rolled the transaction back, the `ROLLBACK` raises
-  "cannot rollback - no transaction is active" and masks the original exception. Wrap it so the
-  original propagates.
-- **F3 (low, GUI-facing).** Read accessors are inconsistent in return type: `image()`, `run()` and
-  `newest_run()` return frozen value objects, while `boxes()`, `candidates()` and `newest_override()`
-  return raw `sqlite3.Row`. Fine within the module; decide before the GUI serializers in chunks 20-22
-  so row-index access does not leak into the web layer.
-- **F4 (nit).** `update_run_counts` returns silently when every count argument is `None`
-  (`catalog.py:~576-586`), so a caller that passes nothing gets a successful no-op. Defensible for an
-  all-optional progress publisher; noted only so it is a decision.
-- **F5 (nit).** `runs.state` has no CHECK constraint, unlike `images.status` and
-  `images.label_source`, so `RunState` is enforced only in Python. The docstring already explains
-  that §5.9 declares the column without enumerating values, so this is faithful to the spec, not
-  drift.
-- **F6 (carried over, still open).** `_load_toml`'s injected-env branch duplicates
-  `config_search_paths()` and drops its `XDG_CONFIG_HOME == ~/.config` dedupe
-  (`config.py:322-340`). Unchanged this iteration.
-- **F7 (informational).** The DEFECT 1 fix has no executable proof yet; it is asserted by source
-  reading only. Self-resolving at chunk 9. Recorded so that nobody later mistakes "reviewed" for
-  "tested".
+- **F8** — `merged()`'s docstring sentence "disjoint apart from nothing at all" is garbled, and the
+  merge is order-dependent: `cub200()` overwrites `coco_animals()`, so a future CUB row keyed `bird`
+  would silently shadow COCO's without an error. No collision exists today (verified: 10 + 200 =
+  `merged size 210`).
+- **F9** — `find_by_common` / `find_by_scientific` build their indexes with `setdefault`, so a
+  duplicate silently keeps the first row while duplicate keys and labels raise. Reachable for
+  `scientific` (two rows can legitimately share a genus/family name at coarser ranks).
+- **F10** — `TaxonTable`'s `_by_common` / `_by_scientific` are dataclass fields, so the underscore
+  names appear in the constructor signature.
+- **F11** — `Taxon.scientific` is typed `str | None` while the CSV column is `""`; the conversion
+  happens in one place (`scientific or None`), so document the invariant before the GUI serializers
+  land.
+- **F12** — `taxonomy/` has no e2e coverage at this commit (same shape as F7 for `catalog.py`).
+  Correctness is currently evidenced by this review's spot-check and `PROGRESS.md`'s ad-hoc runs.
+  Self-resolving at chunk 18 (E8).
+- **F13** — the claim that `cub200.csv`'s 200 keys match `CUB_200_2011.tgz`'s `classes.txt` exactly
+  and in order rests on an ad-hoc run recorded in `PROGRESS.md`. Chunks 15-18 should assert it where
+  the artifact's label list is loaded, since a silent reordering would mislabel every bird.
+- **F14** — `config.py:14` names `min_box_area` inside a sentence asserting it does not exist.
+  Recorded only so a future grep-based audit does not misread the guard as the gate.

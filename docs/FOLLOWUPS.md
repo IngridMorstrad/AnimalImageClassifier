@@ -99,3 +99,50 @@ correctness trap rather than polish, though it has no caller today so nothing is
       The `skipped` upsert, `replace_inference`'s replace-not-append semantics and the `first_seen`
       protection are all asserted by source reading; the 7 green tests exercise `--help` only.
       Recorded so nobody later mistakes "reviewed" for "tested".
+
+## From build review iteration 3 (2026-09-15 22:40 UTC, `7ada6a0`)
+
+Raised against `6e448c2` (`taxonomy/`). None of these withholds approval and none needs attention
+before chunk 5.
+
+- [ ] **F8 — `merged()` is order-dependent and its docstring is garbled** (nit).
+      `taxonomy/labels.py:~430`: `combined.update(cub200().by_key)` means a future `cub200.csv` row
+      keyed `bird` would silently shadow COCO's coarse `bird` class instead of raising. No collision
+      exists today (verified: `merged size 210` = 10 + 200). The docstring sentence "The keys are
+      disjoint apart from nothing at all" is also unreadable — say plainly that COCO contributes
+      `bird` and CUB contributes species keys, and consider raising on an unexpected overlap.
+
+- [ ] **F9 — `find_by_*` indexes silently keep the first duplicate** (low). `labels.py:~415-420`
+      builds `_by_common` / `_by_scientific` with `setdefault`, while duplicate `key` and duplicate
+      `label` both raise. Reachable for `scientific`: two rows at coarser ranks can legitimately
+      share a genus or family name, and the second becomes unreachable by scientific-name lookup
+      with no diagnostic. Decide whether that is intended before the GUI search box (chunks 20-22)
+      depends on it.
+
+- [ ] **F10 — `TaxonTable`'s private indexes are constructor parameters** (nit). `_by_common` and
+      `_by_scientific` are declared as dataclass fields, so `TaxonTable(...)` takes underscore-named
+      keyword arguments. Harmless — `load_table` is the only constructor — but it reads as a leak.
+
+- [ ] **F11 — `Taxon.scientific` type/storage mismatch is undocumented at the boundary** (nit). The
+      CSV column holds `""` for unknown; the dataclass holds `None`. The conversion is in exactly one
+      place (`scientific or None`, `labels.py:~430`), which is correct. Write the invariant down
+      before the GUI serializers land so nobody re-introduces `""` on the way out.
+
+- [ ] **F12 — `taxonomy/` has no executable proof yet** (informational, self-resolving at chunk 18).
+      Neither `catalog.py` nor `taxonomy/labels.py` is reachable from a `--help` invocation, so the
+      7 green tests do not touch either. This chunk's correctness is currently evidenced by the
+      review's spot-check (`chuck_wills_widow`, `arctic_tern`, `brewers_blackbird`, 210/210 labels
+      legal) and `PROGRESS.md`'s ad-hoc runs — not by anything in `docs/test-report.md`. E8's
+      label-directory assertion at chunk 18 is what converts this to a regression test. Same shape
+      as F7.
+
+- [ ] **F13 — `cub200.csv` ↔ `classes.txt` order equality is asserted only ad hoc** (medium — do it
+      at chunks 15-18). `impl-status.json` and `PROGRESS.md` record that the 200 keys match
+      `CUB_200_2011.tgz`'s `classes.txt` exactly and in order, from a one-off `python -c`. That
+      ordering is load-bearing: a silent reordering would mislabel every bird while every label
+      stayed syntactically legal. Assert it where the `.acmodel` label list is loaded.
+
+- [ ] **F14 — `config.py:14` mentions `min_box_area` in a negation** (nit, no action). The docstring
+      sentence asserts that no such knob exists; it is the documented absence of the gate, not the
+      gate. Recorded only so a future grep-based audit of the "no area floor" invariant does not
+      misread the guard as a violation.
