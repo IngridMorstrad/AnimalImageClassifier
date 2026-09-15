@@ -1383,3 +1383,94 @@ the suite green. `scan.py` itself has no e2e coverage yet (recorded as F17) — 
 chunk 12's E16 are where it gets some.
 
 **Next:** chunk 6, `images.py` (decode, the one EXIF-transposed coordinate frame, sha256, blur, crop).
+
+---
+
+## 2026-09-15 23:09 UTC — chunk 6: `images.py` (decode, the one frame, sha256, blur, crop)
+
+**Gate input.** `docs/build-review.json` at `0ed9486` was `CHANGES_REQUESTED` with one blocking
+finding, B1, and it is explicitly a *sequencing* finding: "5 of 26 chunks complete; complete ==
+false", with the review's own notes stating the chunk-5 diff is clean and "no rework is requested".
+So nothing was undone; the fix for B1 is to keep building, which is what this entry records.
+
+**Implemented — `src/animal_classifier/images.py`** (§5.2, §5.3):
+
+- `open_source(path)` is a context manager opening `"rb"` and is the **only** reader of source bytes
+  in the program. `decode()` and `sha256_file()` both go through it, so "the card is never written
+  to" is a property of one line rather than a convention every caller must remember.
+- `decode()` is the §5.2 chain — `Image.open` → `ImageOps.exif_transpose` → `convert("RGB")` — and
+  `DecodedImage.width/height` are the **transposed** size (invariant I9). Raw stored dimensions exist
+  nowhere that outlives the function. `pillow_heif.register_heif_opener()` runs once at import
+  (encode included, which is what will let the fixture builder write the HEIC file E16 needs);
+  `Image.MAX_IMAGE_PIXELS` is set to 400 MP.
+- Per-image failures all raise one exception type, `ImageDecodeError`, carrying the `SkipReason` the
+  caller records: `too_large_pixels` (judged from the **header**, so a bomb is refused without being
+  allocated), `decode_error` (truncated/corrupt/unidentifiable), `unreadable` (file changed under us
+  between the walk and the read). One `except` per image covers decode, and the run's exit class
+  still comes from `scan.exit_code_for`, so this module knows nothing about exit codes.
+- EXIF is optional and never fabricated: `DateTimeOriginal` → ISO-8601, GPS → signed decimal degrees.
+  Absent → NULL. **Present but unusable** → NULL **plus a WARNING**, never repaired: an unparseable
+  timestamp, an out-of-range coordinate (§10.2), or a half-present lat/lon pair (a latitude without a
+  longitude is not a location). `DateTime` is deliberately *not* a fallback for `DateTimeOriginal` —
+  it is the file's modification time and would fabricate an authoritative-looking capture time.
+- `measure_blur()` is variance-of-Laplacian on grayscale, **downscaled only** when the long edge
+  exceeds 512 px and never upscaled, returning `Blur(score, ref_edge)` for the `blur_score` /
+  `blur_ref_edge` column pair. The long edge is set to exactly 512 rather than derived from a rounded
+  scale factor, so every downscaled image reports `ref_edge == 512` and two scores are comparable.
+- `crop()` expands by `crop_margin` of the box's **own** width/height, clips, and cuts.
+  `crop_margin` is a **required keyword with no default**, which is review finding 7 made structural:
+  the artifact's value is the one that must govern framing, and a default here would let a run's
+  config value silently skew inference away from the model's training framing.
+- **RAW** (`--raw`) is lazy-imported; `rawpy` is absent here, so the branch fails loudly as a
+  `ConfigError` (exit 3) naming `uv pip install -e '.[raw]'`. The decode path itself is therefore
+  *unverified in this sandbox* and is recorded as such (see "Blocked" below).
+
+**No area floor, and a real-data correction that proves it.** `crop()` is the most tempting place to
+smuggle a second size gate in, so the degenerate rule returns the box rather than dropping it:
+`Crop(region=…, image=None, degenerate=True)`, `species_status == "degenerate"`, still an animal for
+dominance (§5.3, §5.7, E26). My **first implementation was wrong in the safe direction and the probe
+caught it**: I measured the 2 px side on the outward-rounded integer region, which inflated a 1 px
+box to 3 px and would have handed the classifier three pixels of interpolation. The verdict now uses
+the margin-expanded, clipped **float** extent; the region stays outward-rounded so the margin is
+never lost. Then real COCO ground truth corrected my *expectation*: only 1 of val2017's 7 non-crowd
+sub-2px animal boxes is degenerate, because §5.3 measures the extent **after** the margin — a
+1.79×2.02 box expands to 2.08×2.34 and is genuinely classifiable, while 2.83×1.20 expands to 1.39 px
+tall and is not. The probe now asserts the rule (`degenerate == (min_side × 1.16 < 2)`) on all 7 real
+boxes instead of my guess about it. Code unchanged by that second correction; the assertion was the
+thing that was wrong. `rg` over `src/` finds no `min_box_area` / `min_animal_area` / area-floor
+identifier of any kind — only `config.py`'s comment stating none exists.
+
+**Verified, with real captured output.**
+
+1. `uv run --frozen python scripts/probe_images.py` → **exit 0, 48 PASS, 0 FAIL** (new script; a
+   probe, not a test — the suite stays e2e-only). It builds real JPEG/PNG/HEIC files in a temp dir
+   and covers: `sha256_file` equal to `hashlib.sha256` of the whole file; `open_source().mode ==
+   "rb"`; an **orientation-6** JPEG whose stored raster is 400×200 decoding to **200×400** (I9);
+   `DateTimeOriginal` → `2026-04-17T10:20:30`; GPS `S 1°30'` → `-1.5` and `E 36°45'30"` →
+   `36.75833333333333`; no-EXIF → three NULLs; unparseable datetime and out-of-range GPS → NULL +
+   WARNING; blur `48593.54 @ ref_edge=300` (small sharp, scored natively, **not** junk at
+   `blur_threshold=100`), `1399.77 @ 512` (large sharp), `1.40 @ 512` (large blurred, junk);
+   truncated JPEG → `decode_error` (abnormal); a 30000×30000 PNG header → `too_large_pixels`; a
+   missing file → `unreadable`; HEIC 120×90 round-trip; `--raw` without the extra → `ConfigError`
+   `exit_code == 3` naming `'.[raw]'`; an 8% margin on a 100×100 box → `(392, 192, 508, 308)`;
+   margin clipped at the frame edge → `(0, 0, 54, 54)`; a 1 px box degenerate with `image is None`
+   while its region is still reported; exactly 2 px **not** degenerate and 1.9 px degenerate; and all
+   7 temp source files byte- and mtime-identical after every operation.
+2. Real-data leg of the same probe: **28 real COCO val2017 JPEGs** decoded, dimensions matching
+   COCO's own `width`/`height` **28/28**, blur scored for all (range `76.0 .. 4126.4`, `ref_edges
+   [500, 512]` — the 500 proving the no-upscale path fires on real files), every crop region inside
+   its frame, and all **7** sub-2px non-crowd animal boxes matching the rule (1 degenerate,
+   6 classifiable, `degenerate ⟺ image is None` for all 7).
+3. `uv run --frozen pytest tests/e2e -v` → **7 passed, exit 0**, unchanged from `4fdc624`, which is
+   expected: this chunk adds no test (E11/E18 own `images.py`'s executable coverage) and deletes
+   none. `uv run --frozen python -c "import animal_classifier.images"` → clean.
+
+**Blocked / not verified here.** The RAW *decode* path cannot be exercised in this sandbox (`rawpy`
+is not installed and `download.pytorch.org`/`huggingface.co` are blocked; the extra resolves from
+PyPI but is not part of the locked default set). What **is** verified is the failure mode a user
+without the extra will actually hit: a `ConfigError` with exit code 3 and the install command in the
+message. Recorded rather than papered over.
+
+**Next:** chunk 7 — `detect/base.py` (the `Detector` protocol and the frozen `Box` dataclass in the
+transposed frame) plus `detect/scripted.py` (the shipped `--detector scripted` sidecar reader that
+makes dominance geometry exactly stateable for E5/E6/E26).

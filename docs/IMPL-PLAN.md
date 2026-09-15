@@ -143,7 +143,7 @@ no GUI yet.
       Verify: covered by chunk 12's E16 and chunk 9's E2 (E2's card carries benign skips only and
       must exit 0); interim gate is a clean import plus a green `uv run --frozen pytest tests/e2e -q`.
 
-- [ ] 6. **`images.py`: decode, the one coordinate frame, sha256, blur, crop.** `open_source(path)`
+- [x] 6. **`images.py`: decode, the one coordinate frame, sha256, blur, crop.** `open_source(path)`
       opens `"rb"` and is the only source reader. `PIL.Image.open` → `ImageOps.exif_transpose` →
       `convert("RGB")`; `pillow_heif.register_heif_opener()` once at import;
       `Image.MAX_IMAGE_PIXELS` raised to 400 MP with anything larger a `DecodeError` →
