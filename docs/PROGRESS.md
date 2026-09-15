@@ -353,3 +353,84 @@ reviewer -> PROGRESS.md        : this entry
 Probe artifacts live outside the repo (`/projects/sandbox/.review_block_probe.py`,
 `.review_coco_check.py`, `.depcheck/pyproject.toml`, `.heifprobe/`) so they do not enter the package;
 each is a few lines and reproducible from the descriptions above.
+
+---
+
+## 2026-09-15 16:41 UTC — DESIGN.md iteration 3: all 20 iteration-2 review findings resolved
+
+`docs/design-review.json` (iteration 2) returned `CHANGES_REQUESTED` with 1 HIGH / 13 MEDIUM / 6 NIT
+and **no blocking condition tripped**. Every one of the 20 findings is now resolved in
+`docs/DESIGN.md` (1101 → 1542 lines), with a new **§15** mapping each finding to where it was
+addressed and a **§15.1** answering the reviewer's actionable unverified assumptions.
+
+**Re-measured before writing (not inherited from the review):**
+
+| Quantity | Result |
+|---|---|
+| Val-bucket multi-animal COCO images, GT ratio > 3.0 / > 4.0 / < 1.3 | **22 / 19 / 29** |
+| `ceil(0.8 × len)` for those | **18 / 16 / 24** |
+| `coco_species.json` candidates | **24** |
+| Dominance GT at the 1.6 gate | **235 dominant / 236 multiple** of 471 |
+
+**The HIGH finding (re-tag) — rewritten, and stricter than the suggestion.** Re-tag was defined by
+reference to the three materialize modes, *all* of which read the SD card, so it was unimplementable
+in the normal case (card unplugged). It is now its own operation, `materialize.retag()`: resolve the
+new name, then **one `os.replace`** inside the output tree — which moves a regular file, keeps a
+hardlink's inode, and moves a symlink *as* a symlink without dereferencing it. The source is never
+opened. I deliberately **inverted the reviewer's ordering** (they put the override row after the
+rename): intent is written **before** the rename because I4 demands it, which turns the crash window
+from "two label dirs" into a *pending move* that `verify --fix` completes forward from the `overrides`
+row. No duplicate, no lost image, no intent inferred from the filesystem.
+
+**Two other adaptations, both stated in §15 with the reason:**
+- **Finding 12** (E4's remedy was arithmetically impossible: 19 images available for a hard-coded
+  20-entry list) → the frozen lists now contain **all** qualifying val-bucket images and E4 asserts
+  `>= ceil(0.8 * len(list))` read from the JSON. Re-freezing at ratio > 4.0 now needs **zero** test-code
+  arithmetic changes.
+- **Finding 7** (`too_large` had no rule) → defined as a scan-time `max_file_bytes` (512 MiB) cap and
+  decode's pixel rejection renamed `too_large_pixels`, so the two can never be confused. §3 and I2
+  state explicitly that this byte cap is a whole-file gate that **never sees a box** — it is not an
+  area floor by another name.
+
+**Hard constraints re-verified against the final text:** no `min_box_area` / area floor anywhere
+(`dominance_ratio` is still the only size gate, I2); e2e tests only (`tests/e2e`, no unit tests — §11.2
+now also names the only two sanctioned boundary seams: the shipped `--detector scripted` and E23's
+`httpx.MockTransport` for the blocked eBird host); source tree read-only and now provably so under
+`--hardlink` (I1 gained the no-write rule; E1 gained a hardlink leg and a card-renamed-away leg); no
+silent default for a required value (`temperature` is always written and fatal-if-missing, `slug()`
+raises, reserved labels rejected).
+
+**Also tightened:** re-inference `DELETE`-then-insert order plus `PRIMARY KEY(box_id, rank)` and a
+unique `boxes(sha256, idx)` index (doubling is now impossible, not merely avoided); `--limit` redefined
+as an *inference* budget that `--reclassify` consumes in `last_updated ASC` order; one coordinate frame
+(EXIF-transposed) promoted to invariant I9 with an orientation-6 fixture; catalog-authoritative
+`/api/labels` with `files_on_disk` as a visible cross-check; `/thumb` and `/full` 409 with a reason
+(including dangling symlinks); `include_unscored` + `unscored_excluded` so NULL-confidence rows can
+never be silently filtered away; `export-trainset` label policy table; `verify` exit codes mapped to
+3/4; GUI `busy_timeout = 250 ms`; `run_id` format and "newest run" ordering; 224 px restated as the
+shipped default with E7's 128 px called a test-budget trade-off.
+
+Component relationships for this step:
+
+```
+docs/design-review.json ──┐
+docs/design-review.md  ───┼─→ (this step) ──→ docs/DESIGN.md §1–§13 revised, §15 + §15.1 added
+docs/PLAN.md           ───┤                        │
+docs/RECON.md          ───┘                        └─→ docs/PROGRESS.md (this entry)
+                            ^
+data/raw/annotations/instances_val2017.json
+(re-measured frozen-list availability with the design's own split_for)
+```
+
+Sequence:
+
+```
+step     -> design-review.json/.md : read all 20 findings + assumption lists
+step     -> COCO annotations       : recount 22/19/29 + 24, confirm 235/236
+step     -> DESIGN.md              : resolve findings 1-20 in place
+step     -> DESIGN.md §15/§15.1    : per-finding resolution map + assumption answers
+step     -> PROGRESS.md            : this entry
+```
+
+Next: the design is ready for another cold review pass; nothing in it now depends on a
+RECON-blocked host, and every threshold that could move has a documented, executable remedy.
