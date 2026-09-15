@@ -519,3 +519,118 @@ step -> PROGRESS.md                  : this entry
 Next: the loop returns to the design step for iteration 4. No HIGH and no blocker, so the 11 MEDIUMs
 are all small, local edits — six of them are one clarifying rule each, and the two schema/label ones
 (findings 1 and 2) are the only changes with implementation consequences.
+
+
+## 2026-09-15 21:35 UTC — orchestrator — first workflow aborted, build workflow relaunched
+Run `wf_7b416174f3949cd5` **aborted**. Cause: the `design-loop` was configured `maxIterations: 3`,
+`onMaxIterations: "abort"`, gated on the design reviewer returning `verdict == "APPROVED"`. The
+reviewer never approved (iteration 3 verdict CHANGES_REQUESTED: 0 HIGH / 11 MEDIUM / 8 NIT), so the
+loop exhausted its budget and aborted before `plan`, `build-loop` and `consolidate` ever ran. Three
+hours produced a 1542-line DESIGN.md and no pipeline code. The gate was set too strictly by the
+orchestrator — a reviewer that blocks on MEDIUM findings will always find another MEDIUM.
+
+Corrective actions:
+- **DESIGN.md is frozen** as the spec of record (0 HIGH findings). No design step in the new run.
+- The 11 outstanding MEDIUM findings are converted into code work items, including the two the
+  reviewer reproduced against real data: the `skipped` table PRIMARY KEY raising `IntegrityError`
+  on any second run, and raw dataset class names leaking into paths (`~/animal_pics/022_chuck_will_widow/`).
+- New run `safari-classifier-build`: `plan` → `build-loop` (maxIterations **24**,
+  onMaxIterations **continue**, so exhaustion cannot kill it) → `consolidate`.
+- The build reviewer has an explicit anti-stall rule: only correctness / spec-violation / data-loss /
+  safety defects may block; style and polish go to docs/FOLLOWUPS.md.
+- Implementation is sequenced so a working end-to-end slice (scan → detect → decide → materialize →
+  catalog → `classify` CLI green on fixtures) lands FIRST, before model training and GUI.
+
+Recon superseded an earlier orchestrator caveat: real training IS possible in-sandbox. timm
+`efficientnet_b0` / `convnext_nano` load from GitHub release assets, and `s3.amazonaws.com` reaches
+the fast.ai mirror for CUB-200-2011 and COCO. The synthetic-dataset fallback is retired.
+
+
+## 2026-09-15 21:42 UTC — plan step — implementation checklist written, DESIGN.md left frozen
+Converted the frozen `docs/DESIGN.md` (iteration 3, 1,542 lines) into an ordered implementation
+queue. **No design work was done**: DESIGN.md, PLAN.md, RECON.md and design-review.md were read only,
+and not one byte of any of them was modified. No new design document was produced. No pipeline source
+code was written in this step — the build loop writes the code.
+
+Deliverables:
+- `docs/IMPL-PLAN.md` — **26** `- [ ]` chunks, each naming its exact absolute file paths, what it must
+  do and the e2e test that proves it, sequenced so a **working end-to-end slice lands first**:
+  dependency contract → errors/config → catalog → taxonomy/slug → scan → images → detector protocol +
+  scripted detector → decide + materialize → `classify` wired green on committed fixtures (chunk 9) →
+  idempotency/limit/reclassify (10) → immutability + link modes + collisions (11). Only then formats/
+  skips/fail-loud (12–13), real MegaDetector + E4 against COCO ground truth (14), training and the
+  species head (15–17), birds (18–19), GUI (20–22), export-trainset/verify/shipped artifacts/docs
+  (23–26).
+- `docs/impl-status.json` — `{"complete": false, "total_items": 26, "done_items": 0, "current_chunk":
+  "1. Dependency contract and the three probes on the locked env"}` for the build loop's reviewer.
+
+All 11 outstanding MEDIUM findings from `docs/design-review.md`, all 8 NITs, and the 2 defects
+reproduced against real data are folded in as explicit items, with a traceability table at the foot of
+IMPL-PLAN.md mapping each to its owning chunk. The two reproduced defects get regression gates rather
+than prose: the `skipped` PRIMARY KEY `IntegrityError` is fixed by an `ON CONFLICT(path) DO UPDATE`
+upsert in chunk 3 and proved by chunk 10 running the pipeline **twice** over the same fixture tree
+(second run must succeed as a clean no-op, with exactly one `skipped` row carrying the second run's
+`run_id`); the raw-class-name leak gets a normalization layer in chunk 4
+(`022.Chuck_will_Widow` → `chuck_will_widow`, display names from the authoritative
+`taxonomy/data/cub200.csv`) and chunk 18 asserts every created label directory matches
+`^[a-z][a-z0-9_]*$` with no leading digits, so `~/animal_pics/022_chuck_will_widow/` can never appear.
+
+Non-negotiables carried into the plan verbatim: `dominance_ratio` 1.6 is the only size gate and there
+is **no `min_box_area`** under any name (chunk 2's fatal unknown-TOML-key check is what stops one being
+reintroduced by config, chunk 9's E6 asserts `classify --help` exposes no such option); the closed
+label set; read-only source with atomic temp+`os.replace` writes and the I1 no-write rule for
+`--hardlink`'s aliased inode; copy default with `--link`/`--hardlink`; sha256-keyed idempotent
+resumable runs against `<root>/.catalog.db`; the FastAPI + vanilla-JS GUI on 127.0.0.1:8765 with a
+re-tag that MOVES the file and records the override; `ebird_enrich` optional/off/unreachable and
+`hosted_bird_api` failing loudly; **E2E tests only** under `tests/e2e/`; and no silent default for any
+required value.
+
+Verified with real output in this step (read-only inspection, nothing built):
+- `git -C … log --oneline -5` → HEAD `3335e88` on `feat/safari-classifier`, clean tree.
+- Assets on disk: `models/md_v5a.0.0.pt` 280,766,885 B; `models/backbones/`
+  `efficientnet_b0_ra-3dd342df.pth` + `convnext_nano_d1h-7eb4bdea.pth`; `data/raw/CUB_200_2011.tgz`,
+  `val2017.zip`, `annotations_trainval2017.zip`, and `data/raw/annotations/instances_val2017.json`
+  already extracted. Everything chunks 14–18 need is local — no blocked host is on the path.
+- `.venv/lib/python3.12` exists, so the 3.12 pin chunk 1 writes matches the venv the probes ran in
+  (the host `python3` is 3.9.25, which is exactly why `.python-version` is load-bearing).
+- `rg -c '^- \[ \] ' docs/IMPL-PLAN.md` → **26**, matching `total_items`.
+
+Blocked / risks recorded, not hidden:
+- Three thresholds cannot be known until the suite runs — E4's `>= ceil(0.8 * len(list))` against real
+  MegaDetector output, E7's `val_top1 >= 0.55` plus its identity leg, and E10's `>= 0.90` in < 90 s.
+  The plan carries DESIGN.md §11.2's sanctioned remedies inline (re-freeze E4 at ratio > 4.0 and let
+  the list length follow the data; raise E7's `--input-size` toward 224 and/or `--epochs-finetune`) and
+  forbids the alternatives (never lower a threshold in test code, never pad a frozen list with
+  train-bucket images, never widen `min_species_confidence` for a test).
+- `pyproject.toml` on disk still says `requires-python = ">=3.10"` with `typer` as its only dependency,
+  and there is no `.python-version` — i.e. the §2.1 dependency contract is **not yet in place**. That is
+  chunk 1, and nothing else may start until `uv sync --frozen` plus all three RECON probes pass on the
+  locked environment.
+- `api.ebird.org` answers `000` here, so chunk 19's live legs can only assert the degradation path; the
+  matching rule is covered by the single sanctioned `httpx.MockTransport` seam.
+
+Component relationships for this step:
+
+```
+docs/DESIGN.md (frozen)  ─┐
+docs/design-review.md    ─┼─→ (this step: plan only) ─→ docs/IMPL-PLAN.md ──→ build-loop (coder)
+docs/RECON.md            ─┤                         └─→ docs/impl-status.json (reviewer's gate)
+src/animal_classifier/cli.py (placeholders) ─┘       └─→ docs/PROGRESS.md (this entry)
+```
+
+Sequence:
+
+```
+step -> DESIGN.md §1-§15        : read all 1542 lines (stack, pipeline, schema, GUI, E1-E26, build order)
+step -> design-review.md        : lift the 11 MEDIUMs + 8 NITs into owned checklist items
+step -> RECON.md                : confirm every asset the plan leans on is local
+step -> disk (models/, data/raw): verify sizes/presence directly, not from the document
+step -> cli.py, conftest.py     : confirm the placeholder surface the plan must replace
+step -> pyproject.toml, uv.lock : confirm the dependency contract is NOT yet applied -> chunk 1
+step -> docs/IMPL-PLAN.md       : 26 ordered chunks + traceability table
+step -> docs/impl-status.json   : complete=false, total_items=26
+step -> docs/PROGRESS.md        : this entry
+```
+
+Next: the build loop starts at chunk 1 (dependency contract + the three probes), then chunks 2–8, and
+the first green e2e run is chunk 9 (`classify` on the fixture card: E2, E5, E6, E26).

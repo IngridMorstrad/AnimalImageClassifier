@@ -1,0 +1,19 @@
+{
+  "complete": false,
+  "total_items": 26,
+  "done_items": 0,
+  "current_chunk": "1. Dependency contract and the three probes on the locked env",
+  "plan_file": "docs/IMPL-PLAN.md",
+  "spec_of_record": "docs/DESIGN.md",
+  "branch": "feat/safari-classifier",
+  "phases": {
+    "A_end_to_end_slice": "chunks 1-11",
+    "B_formats_states_faillLoud": "chunks 12-13",
+    "C_real_detector": "chunk 14",
+    "D_training_species_head": "chunks 15-17",
+    "E_birds": "chunks 18-19",
+    "F_gui": "chunks 20-22",
+    "G_loop_closers_polish": "chunks 23-26"
+  },
+  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk."
+}
