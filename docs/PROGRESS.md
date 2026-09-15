@@ -795,3 +795,46 @@ Two things for whoever reads this next:
 - E2E-only spec is respected: zero `.py` files under `tests/` outside `tests/e2e/`.
 
 No source or test file was edited in this step. `uv sync` was not needed. Blocked: nothing.
+
+---
+
+## 2026-09-15 21:57 UTC — gate review, iteration 1: **CHANGES_REQUESTED (1 blocking finding)**
+
+Reviewed the real diff `6a3cc67..HEAD` (commits `a8103ab`, `c59a656`) plus the captured e2e output
+in `docs/test-report.md`. Did not re-run the suite. Full narrative in `docs/build-review.md`;
+machine verdict in `docs/build-review.json`.
+
+**The one blocking finding is sequencing, not a defect.** `docs/impl-status.json` has
+`complete: false` with `done_items: 2` of `26`, and approval requires `complete == true`. Nothing in
+`errors.py`, `config.py` or `pyproject.toml` needs to be undone. Continue at chunk 3.
+
+**Chunks 1-2 are clean against every item on the blocking checklist.** Specifically verified:
+
+- **No area floor anywhere.** `rg` over the repo matches `min_box_area` and friends only in prose
+  asserting their absence. No box area is compared to any constant. `dominance_ratio` is
+  range-checked `minimum=1.0` with the rationale string spelling out why — invariant I2 exactly.
+  The unknown-TOML-key error message itself says a floor setting deliberately does not exist, so
+  reintroducing one by config fails loudly.
+- **No silent defaulting of a required value.** Missing SOURCE, `ebird_enrich` without its key
+  (empty string included), `hosted_bird_api`, `--device cuda` on this CUDA-less host, a broken torch
+  import, and each missing model asset all raise with the resolved absolute path and a
+  copy-pasteable remedy.
+- **e2e-only respected.** Zero `.py` files under `tests/` outside `tests/e2e/`; `testpaths` pinned.
+- **TOML key set matches DESIGN.md §3 exactly**, plus the one documented, justified addition
+  `detector_max_det`.
+
+**On the empty suite:** the report claims nothing passed and says so plainly, so this is not a
+"green without evidence" violation and I did not treat it as one. The honest consequence is that
+every correctness claim above rests on source reading, not observed behaviour, until E22 and E6 land
+in chunk 9.
+
+**Still entirely unproven** and the reason the loop must continue: the chunk-3 `skipped` PRIMARY KEY
+`IntegrityError` / second-run-no-op fix; the first e2e tests (chunk 9); atomic writes and the
+`--link`/`--hardlink`/`--dry-run`/`--reclassify` contract (chunk 11); low-confidence-files-as-`unknown`
+and human-readable species slugs (chunks 15-19).
+
+**5 non-blocking observations** recorded in the new `docs/FOLLOWUPS.md` — none withholds approval.
+The two worth acting on soon: `output_root` uses `os.path.abspath` while `source_root` uses
+`Path.resolve()`, so a symlinked `output_root` could evade `_guard_nesting` (fix before
+`materialize.py` lands in chunk 11); and `pytest` sits in the `dev` extra that neither documented
+test command requests, which will break under `--frozen` on a clean machine.
