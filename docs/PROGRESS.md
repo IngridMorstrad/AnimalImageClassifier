@@ -1144,3 +1144,43 @@ Nothing. Next is chunk 5 (`scan.py`), which must **first** act on `FOLLOWUPS.md`
 refreshes `status`/`run_id` and defaults to `planned`, so an unconditional call from the new scanner
 would reset `done` rows to `planned` and defeat the clean-no-op invariant from the caller side, where
 the `skipped` upsert cannot protect it.
+
+---
+
+## 2026-09-15 22:37 UTC — e2e suite re-run at chunk 4 (`6e448c2`): 7 passed, 0 failed, exit 0
+
+**Command actually run** (from the repo root, output captured verbatim in `docs/test-report.md` §2):
+
+```
+cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v
+```
+
+`uv sync` was not needed — the existing `.venv` (Python 3.12.13, pytest 9.1.1) resolved and ran
+as-is. No source or test file was edited in this step; the only writes are `docs/test-report.md`,
+this entry, and the commit.
+
+**Real counts:** 7 collected, **7 passed**, 0 failed, 0 errored, 0 skipped, process exit code **0**,
+0.94s. All 7 are from `tests/e2e/test_cli_surface.py`:
+`test_top_level_help_lists_every_command`, plus `test_no_command_offers_an_area_floor` parametrized
+over `classify`, `gui`, `train`, `eval`, `export-trainset`, `verify`. Same test set and same result
+as the previous recorded run at `c87a690` — chunk 4 added no e2e leg, so the suite did not grow.
+
+Because there were no failures, there is no assertion message or responsible source file to report.
+
+**Honest scope of this green.** The whole suite reads `--help` output. It proves invariant I2 is
+still absent from the CLI surface (none of 10 area-floor spellings appear under any of the six
+commands) and that all six commands are registered. It does **not** touch detection, the dominance
+rule, materialization, the catalog, the GUI, training, or the bird providers. Notably
+`catalog.py` (chunk 3) and `taxonomy/labels.py` (chunk 4, this commit) are **not reachable from a
+`--help` call and so have zero e2e coverage in this run** — the `python -c` evidence recorded in the
+chunk 3 and 4 entries above is what stands behind them, not this report. E6's full form is chunk 9;
+E8's label-directory assertion is chunk 18.
+
+**Spec compliance (e2e only):** clean. `find tests/ -name '*.py' -not -path '*/e2e/*'` returned
+nothing, so there is no unit-test file to flag; `tests/e2e/` holds only `conftest.py` and
+`test_cli_surface.py`, and `pyproject.toml` pins `testpaths = ["tests/e2e"]`.
+
+**Blocked:** nothing in the test step itself. Carrying forward unchanged from chunk 4: chunk 5
+(`scan.py`) must first act on `FOLLOWUPS.md` F1 — `ensure_image` refreshes `status`/`run_id` and
+defaults to `planned`, so an unconditional call from the new scanner would reset `done` rows to
+`planned`. That is a `code`-step concern, not a testing blocker.

@@ -1,7 +1,7 @@
 # E2E test report
 
-**Run timestamp:** 2026-09-15 22:14 UTC
-**Branch:** `feat/safari-classifier` @ `c87a690`
+**Run timestamp:** 2026-09-15 22:37 UTC
+**Branch:** `feat/safari-classifier` @ `6e448c2`
 
 ## 1. Commands run
 
@@ -9,12 +9,13 @@
 cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v
 ```
 
-`uv sync` was **not** needed — the environment resolved and ran as-is. Two supporting read-only
+`uv sync` was **not** needed — the environment resolved and ran as-is. Three supporting read-only
 commands were run to characterise the result (no source or test file was edited):
 
 ```
-find /projects/sandbox/AnimalImageClassifier/tests -type f -name '*.py' | sort
-git -C /projects/sandbox/AnimalImageClassifier status --short
+git -C /projects/sandbox/AnimalImageClassifier status --short --branch
+find /projects/sandbox/AnimalImageClassifier/src -type f -name '*.py' | sort
+find /projects/sandbox/AnimalImageClassifier/tests -type f -name '*.py' -not -path '*/e2e/*'
 ```
 
 ## 2. Verbatim output
@@ -38,19 +39,16 @@ tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[eval] PASSED
 tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[export-trainset] PASSED [ 85%]
 tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[verify] PASSED [100%]
 
-============================== 7 passed in 1.00s ===============================
+============================== 7 passed in 0.94s ===============================
 ```
 
 Process exit code: **0**.
 
-Test-file inventory under `tests/` — complete output:
+Test-file inventory outside `tests/e2e/` — the `find` above printed **no output at all** (no such
+file exists).
 
-```
-/projects/sandbox/AnimalImageClassifier/tests/e2e/conftest.py
-/projects/sandbox/AnimalImageClassifier/tests/e2e/test_cli_surface.py
-```
-
-`git status --short` printed nothing (clean tree) before this step's own writes.
+`git status --short --branch` printed only `## feat/safari-classifier` (clean tree) before this
+step's own writes.
 
 ## 3. Summary
 
@@ -63,7 +61,8 @@ Test-file inventory under `tests/` — complete output:
 | **collected** | **7** |
 
 **No failures and no collection errors**, so there is no failing test name, assertion message, or
-responsible source file to report. Exit code 0, up from the previous run's 5 (empty suite).
+responsible source file to report. Exit code 0. Identical test set and identical result to the
+previous recorded run at `c87a690` (7 passed); wall time 0.94s vs 1.00s.
 
 **What these 7 tests actually prove — and what they do not.** All 7 come from one file,
 `tests/e2e/test_cli_surface.py`, and all 7 exercise `--help` output only:
@@ -76,21 +75,27 @@ responsible source file to report. Exit code 0, up from the previous run's 5 (em
   `min-box-frac`, `min_box_frac`).
 
 That is the executable guard on DESIGN.md invariant I2 (no `min_box_area`; `dominance_ratio` is the
-only size gate), which is a standing user requirement — so it is worth having green this early. But
-it is the CLI-surface leg of **E6 only**. This run does **not** exercise detection, classification,
-the dominance rule, materialization, the catalog, the GUI, training, or the bird providers. Per the
-file's own docstring, E6's full form (a real `classify` run over the fixture card asserting the
-dominance rule decides alone) lands in chunk 9. No claim about pipeline behaviour is supported by
-this output.
+only size gate), which is a standing user requirement. But it is the CLI-surface leg of **E6 only**.
+This run does **not** exercise detection, classification, the dominance rule, materialization, the
+catalog, the GUI, training, or the bird providers.
 
-**Progress context (from `docs/impl-status.json`, not inferred).** `done_items: 3` of
-`total_items: 26`, `current_chunk: "4. taxonomy/: slug(), LABEL_RE, RESERVED_LABELS and the static
-name tables"`. 7 passing CLI tests at chunk 3 is the expected state; E1–E26 are not yet written.
+**Untested source at this commit (fact, from the `find` output above).** Seven modules exist under
+`src/animal_classifier/`: `__init__.py`, `cli.py`, `config.py`, `errors.py`, `catalog.py`,
+`taxonomy/__init__.py`, `taxonomy/labels.py`. Only `cli.py`'s `--help` output is touched by this
+suite. In particular `catalog.py` (chunk 3) and `taxonomy/labels.py` (chunk 4, this commit's
+subject) have **no e2e coverage in this run** — neither module is reachable from a `--help`
+invocation. Their correctness is currently evidenced only by the ad-hoc `python -c` runs recorded in
+`PROGRESS.md`, not by anything in this report. Per `test_cli_surface.py`'s docstring and the plan,
+E6's full form lands in chunk 9 and the label-directory assertion (E8) in chunk 18.
 
-**Spec compliance (e2e only).** No violation. `tests/` contains exactly two `.py` files, both under
-`tests/e2e/` (`conftest.py`, `test_cli_surface.py`). No unit-test file exists anywhere under
-`tests/` outside `tests/e2e/`, and `pyproject.toml` pins `testpaths = ["tests/e2e"]`. Nothing was
-deleted.
+**Progress context (read from `docs/impl-status.json`, not inferred).** `done_items: 4` of
+`total_items: 26`, `current_chunk: "5. scan.py: read-only walk, one rule per skip reason, benign vs
+abnormal exit class"`. 7 passing CLI tests at chunk 4 is the expected state; E1–E26 are not yet
+written.
+
+**Spec compliance (e2e only).** No violation. The explicit search for `.py` files under `tests/`
+outside `tests/e2e/` returned nothing, `tests/e2e/` holds exactly `conftest.py` and
+`test_cli_surface.py`, and `pyproject.toml` pins `testpaths = ["tests/e2e"]`. Nothing was deleted.
 
 **Blocked:** nothing in this step. The suite runs, collects, and passes. Coverage breadth is a
-sequencing fact (chunk 3 of 26), not a blocker on testing.
+sequencing fact (chunk 4 of 26), not a blocker on testing.
