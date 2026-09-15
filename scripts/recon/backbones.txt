@@ -1,0 +1,16 @@
+# Candidate pretrained-backbone weight URLs probed during recon. Format: label|url
+torchvision-resnet50|https://download.pytorch.org/models/resnet50-0676ba61.pth
+torchvision-mobilenetv3|https://download.pytorch.org/models/mobilenet_v3_large-8738ca79.pth
+timm-hf-resnet50|https://huggingface.co/timm/resnet50.a1_in1k/resolve/main/pytorch_model.bin
+timm-gh-legacy-resnet50|https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/resnet50_ram-a26f946b.pth
+timm-gh-legacy-effnet-b0|https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth
+effnet-pytorch-b0|https://github.com/lukemelas/EfficientNet-PyTorch/releases/download/1.0/efficientnet-b0-355c32eb.pth
+effnet-pytorch-b3|https://github.com/lukemelas/EfficientNet-PyTorch/releases/download/1.0/efficientnet-b3-5fb5a3c3.pth
+pytorchcv-resnet50|https://github.com/osmr/imgclsmob/releases/download/v0.0.147/resnet50-0633-b00d1c93.pth.zip
+pytorchcv-mobilenetv3|https://github.com/osmr/imgclsmob/releases/download/v0.0.491/mobilenetv3_large_w1-2106-3c5ee1a5.pth.zip
+ultralytics-yolov8n-cls|https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n-cls.pt
+ultralytics-yolov8s-cls|https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s-cls.pt
+ultralytics-yolo11n-cls|https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-cls.pt
+yolov5-gh-yolov5s|https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5s.pt
+speciesnet-kaggle-page|https://www.kaggle.com/models/google/speciesnet
+bioclip-hf|https://huggingface.co/imageomics/bioclip/resolve/main/open_clip_pytorch_model.bin

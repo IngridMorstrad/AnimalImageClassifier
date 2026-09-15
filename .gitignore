@@ -8,6 +8,10 @@ __pycache__/
 models/*.pt
 models/*.pth
 models/*.onnx
+models/backbones/
+
+# Downloaded datasets — never committed
+data/
 
 # Catalog / databases
 *.sqlite

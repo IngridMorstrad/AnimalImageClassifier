@@ -1,0 +1,19 @@
+# Candidate labelled animal/bird imagery sources probed during recon. Format: label|url
+fastai-imagewoof-320|https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2-320.tgz
+fastai-imagenette-320|https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-320.tgz
+cub200-caltech|https://data.caltech.edu/records/65de6-vp158/files/CUB_200_2011.tgz
+oxford-iiit-pets|https://thor.robots.ox.ac.uk/~vgg/data/pets/images.tar.gz
+stanford-dogs|http://vision.stanford.edu/aditya86/ImageNetDogs/images.tar
+cifar100-toronto|https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz
+tiny-imagenet-stanford|http://cs231n.stanford.edu/tiny-imagenet-200.zip
+lila-serengeti|https://lila.science/datasets/snapshot-serengeti
+openimages-gcs|https://storage.googleapis.com/openimages/2018_04/train/train-images-boxable-with-rotation.csv
+imagenet-sample-images-gh|https://raw.githubusercontent.com/EliSchwartz/imagenet-sample-images/master/n02118333_red_fox.JPEG
+imagenet-class-index-gh|https://raw.githubusercontent.com/raghakot/keras-vis/master/resources/imagenet_class_index.json
+gbif-api-species|https://api.gbif.org/v1/species/match?name=Panthera%20leo
+gbif-api-occurrence-media|https://api.gbif.org/v1/occurrence/search?scientificName=Panthera%20leo&mediaType=StillImage&limit=1
+wikimedia-commons-api|https://commons.wikimedia.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:Panthera%20leo&cmtype=file&cmlimit=1&format=json
+wikipedia-rest-summary|https://en.wikipedia.org/api/rest_v1/page/summary/Lion
+ebird-api-taxonomy|https://api.ebird.org/v2/ref/taxonomy/ebird?fmt=json
+inaturalist-api-taxa|https://api.inaturalist.org/v1/taxa?q=lion
+macaulay-library|https://search.macaulaylibrary.org/api/v1/search?taxonCode=norcar&mediaType=photo

@@ -1,0 +1,13 @@
+# fast.ai public S3 dataset mirror (s3.amazonaws.com proved reachable). Format: label|url
+cub200-2011-imageclas|https://s3.amazonaws.com/fast-ai-imageclas/CUB_200_2011.tgz
+cub200-2011-imageloc|https://s3.amazonaws.com/fast-ai-imageloc/CUB_200_2011.tgz
+oxford-iiit-pet-imageclas|https://s3.amazonaws.com/fast-ai-imageclas/oxford-iiit-pet.tgz
+caltech-101|https://s3.amazonaws.com/fast-ai-imageclas/caltech_101.tgz
+cifar100-fastai|https://s3.amazonaws.com/fast-ai-imageclas/cifar100.tgz
+imagewoof2-full|https://s3.amazonaws.com/fast-ai-imageclas/imagewoof2.tgz
+imagenette2-160|https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz
+food-101|https://s3.amazonaws.com/fast-ai-imageclas/food-101.tgz
+pascal-voc2007|https://s3.amazonaws.com/fast-ai-imagelocal/pascal_2007.tgz
+coco-sample|https://s3.amazonaws.com/fast-ai-coco/coco_sample.tgz
+coco-val2017|https://s3.amazonaws.com/fast-ai-coco/val2017.zip
+coco-annotations|https://s3.amazonaws.com/fast-ai-coco/annotations_trainval2017.zip
