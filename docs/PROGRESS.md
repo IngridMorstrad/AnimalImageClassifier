@@ -265,3 +265,60 @@ blur metric downscale-only with `blur_ref_edge`; link-mode `readlink` comparison
 
 Still zero implementation code. Test count is now **E1–E26, end-to-end only**. Next: design re-review,
 then implementation starting with the §2.1 dependency contract and the three probe re-runs.
+
+## 2026-09-15 16:26 UTC — design review iteration 2 (cold): CHANGES_REQUESTED (1 HIGH / 13 MEDIUM / 6 NIT)
+
+Reviewed `docs/DESIGN.md` iteration 2 without the context that produced it. Wrote
+`docs/design-review.md` (narrative) and `docs/design-review.json` (gate). Verdict
+**CHANGES_REQUESTED** — 20 findings, none of them a hard blocker.
+
+**No blocking condition applies.** Re-checked each one: no `min_box_area` or absolute area floor
+under any name (the only four mentions are explicit negations; `dominance_ratio` 1.6 is the single
+size gate, applied as a multiplication); no unit tests or any layer outside `tests/e2e`; no
+dependence on a RECON-blocked host (`api.ebird.org` is opt-in and off by default, its
+unreachability recorded as `provider_status='unreachable'`); no write/move/rename/delete in the
+source tree; no silent default for a required value; and every required capability present
+(MegaDetector v5a, own finetuned species model + training subsystem + `train`, three bird
+providers, the five-label set, atomic writes, copy/`--link`/`--hardlink`, sha256 idempotency, the
+SQLite catalog, the FastAPI + vanilla-JS GUI on 127.0.0.1:8765 with a file-moving re-tag, the six
+typer commands, and the JPEG/PNG/TIFF/HEIC + `--raw` + skip-video format policy).
+
+**Everything measurable in DESIGN.md was re-measured, and all of it reproduced exactly.** Four
+independent probes, not inherited from RECON:
+
+1. MegaDetector `md_v5a.0.0.pt` — 280,766,885 B and sha256 `94e88fe9…b01b276` recomputed; loads
+   through the `models`/`utils` alias shim; `names=['animal','person','vehicle']`,
+   `stride=[8,16,32,64]`, forward → `(1, 25500, 8)`.
+2. §2.1's load-bearing claim — with `roboflow` and `sahi` blocked at import via a `sys.meta_path`
+   hook, `import yolov5`, `letterbox`, `non_max_suppression`, `scale_boxes`, the checkpoint load and
+   a 640×640 forward all succeed and neither module is imported.
+3. `uv pip compile` on the exact §2.1 `pyproject.toml` — resolution contains
+   `opencv-python-headless==5.0.0.93`, `typer==0.27.2`, `torch==2.14.0`, `timm==1.0.29`,
+   `pillow==12.3.0`, `pillow-heif==1.7.0`, `rawpy==0.27.1`, and **no** `opencv-python`, `roboflow`
+   or `sahi`. The override trick works as designed.
+4. `pillow-heif==1.7.0` + `pillow==12.3.0` on py3.12 — `libheif 1.23.3`, `save(format="HEIF")` and
+   re-open round-trip OK, so E16's HEIC fixture is genuinely buildable (iteration-1 blocker cleared).
+5. COCO recount from `instances_val2017.json` with the design's own `split_for`: 2,700 − 34 crowd =
+   **2,666** over **1,016** images, per-class counts identical; **7** sub-2px boxes, min `area_frac`
+   `1.2426814988e-05`; **235 dominant / 236 multiple** at 1.6; **813/203** image split; ratio > 3.0 →
+   104/**22 val**, ratio < 1.3 → 149/**29 val**, ratio > 4.0 → 79/**19 val**; E7 crops
+   **1,625/349** with majority baseline **0.229** and `bear` at 11 val instances; 24 candidates for
+   `coco_species.json`. Every number matches the design.
+
+**The findings that must be fixed before coding.** HIGH: re-tag never says what bytes it
+materializes from — all three materialize modes read the SD-card source, but the GUI is used with
+the card unplugged, so the specified path is unimplementable in the normal case (fix: re-tag is a
+pure `os.replace` inside `output_root`, never opening the source). MEDIUM, in short: `--reclassify`
+leaves duplicate `boxes`/`candidates` rows; `--limit` budget contradicts `--reclassify`;
+`temperature` undefined for an uncalibrated artifact; `slug()` handles only spaces and has no
+defined failure; the EXIF-orientation frame for `width`/`height`/boxes/thumbs is unstated;
+`too_large`/`symlink_loop` have no defining rule and symlinked source files no policy;
+`ebird_enrich`'s static table is absent from the layout and its candidate-matching rule undefined;
+`/api/labels` (filesystem) and `/api/images` (catalog) are two sources of truth; `/thumb` has no
+defined input; `export-trainset` is undefined for `multiple`/`landscape`/`junk`/`unknown`; E4's
+sanctioned remedy needs 20 images where only **19** exist at ratio > 4.0 (measured); hardlink inode
+aliasing is outside I1's path-based proof; and NULL-confidence rows silently vanish from confidence
+filters.
+
+Next: design iteration 3 addressing the HIGH and all 13 MEDIUMs, then re-review. Still zero
+implementation code.
