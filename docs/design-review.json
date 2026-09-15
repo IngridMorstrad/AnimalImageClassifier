@@ -1,183 +1,139 @@
 {
   "verdict": "CHANGES_REQUESTED",
-  "reviewedAt": "2026-09-15T16:40Z",
-  "target": "/projects/sandbox/AnimalImageClassifier/docs/DESIGN.md",
-  "designIteration": 2,
-  "counts": {"HIGH": 1, "MEDIUM": 13, "NIT": 6},
-  "blockingConditions": {
-    "minBoxAreaOrAbsoluteAreaFloor": false,
-    "nonE2eTestLayer": false,
-    "dependsOnUnreachableAssetWithoutFallback": false,
-    "writesToSourceTree": false,
-    "silentDefaultForMissingRequiredValue": false,
-    "omitsRequiredCapability": false
-  },
   "findings": [
     {
       "id": 1,
-      "severity": "HIGH",
-      "section": "§5.8 re-tag, §6 POST /api/images/{sha256}/label",
-      "problem": "Re-tag is specified as 'materialize into <new_label>/ then unlink the old destination', but all three documented materialize modes read from the SD-card source (stream copy, os.symlink(abs_source), os.link(source)). The GUI is used after the card is unplugged, so the specified path is unimplementable in the normal case; link-mode behaviour (move the symlink vs recreate it) is undefined; and the promised 'present in two label dirs' crash window contradicts a plain rename.",
-      "fix": "Define re-tag as a pure output-tree operation that never opens the source: new = collision_resolve(output_root/new_label/old.name, sha256, mode=row.mode); os.replace(old_dest, new); then write the overrides row. os.replace moves a regular file, a hardlink or the symlink itself without dereferencing, so a dangling link is fine. Reuse §5.8 collision rules (same content or equal readlink -> unlink old, already_present; different content -> <stem>-<sha8><suffix>). Delete the 'two label dirs' sentence, or keep copy-then-unlink and state the bytes come from old_dest, never the source."
+      "severity": "MEDIUM",
+      "section": "§5.9 catalog schema — skipped table",
+      "problem": "skipped(path TEXT PRIMARY KEY) has no insert statement specified and no upsert, while sources gets an explicit ON CONFLICT upsert. Skips are the normal case (every card has a video/hidden/oversize file) and §5.9 requires re-runs to re-walk the tree, so the same path is re-skipped on run 2. Verified empirically against the exact published schema on sqlite 3.40.0: 'IntegrityError -> UNIQUE constraint failed: skipped.path'. E13 (classify twice) and E16 (a card whose point is skipped files) both walk into this.",
+      "fix": "Publish the statement beside the sources one: INSERT INTO skipped(path, reason, detail, run_id, seen_at) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET reason=excluded.reason, detail=excluded.detail, run_id=excluded.run_id, seen_at=excluded.seen_at; and extend E13 to assert that a second run over a card containing an .mp4 leaves exactly one skipped row for that path, carrying the second run's run_id."
     },
     {
       "id": 2,
       "severity": "MEDIUM",
-      "section": "§5.9 idempotency/resume, §5.9 schema",
-      "problem": "--reclassify re-runs inference but no rule deletes the previous boxes/candidates rows, and neither table has a uniqueness constraint, so every re-classification duplicates boxes and candidates. That corrupts /api/images, the box overlay and export-trainset's 'dominant box'. E13 only covers the skip path, so no test catches it.",
-      "fix": "State the per-image transaction order: DELETE FROM candidates WHERE box_id IN (SELECT id FROM boxes WHERE sha256=:sha); DELETE FROM boxes WHERE sha256=:sha; re-insert; UPDATE images. Add a --reclassify leg to E13 asserting COUNT(*) over boxes and candidates is unchanged after the second run."
+      "section": "§5.8 slug() rationale, §7.2 build_cub_manifest.py, §4 ebird_aliases.csv",
+      "problem": "§5.8 justifies slug() with 'humanised CUB-200 names carry apostrophes and periods (Brewer's Blackbird, Le Conte's Sparrow)'. CUB-200-2011's real classes.txt, read from data/raw/CUB_200_2011.tgz, has no apostrophes: names are already underscored with a numeric prefix (001.Black_footed_Albatross, 022.Chuck_will_Widow, 193.Bewick_Wren). §7.2 says the manifest builder takes 'the species from its directory name', which yields artifact labels like 022.Chuck_will_Widow, slugging to 022_chuck_will_widow — so the user gets ~/animal_pics/022_chuck_will_widow/, contradicting PLAN.md's '~/animal_pics/lion' and the common/scientific-name promise. cub200.csv exists in §4 but is never made authoritative, and the cub_key spelling used by ebird_aliases.csv is therefore also undefined.",
+      "fix": "State the derivation once in §7.2 and §4: strip the ^\\d{3}\\. prefix so 022.Chuck_will_Widow -> key 'chuck_will_widow' (the same spelling used for cub_key); taxonomy/data/cub200.csv is authoritative for display common names and scientific names (NULL where unknown, §13.3); the directory name derives the key only and is never used as the label directory. Add to E8: the resulting label directory matches ^[a-z][a-z0-9_]*$ with no leading digits."
     },
     {
       "id": 3,
       "severity": "MEDIUM",
-      "section": "§5.9 '--limit N caps images newly submitted to inference'",
-      "problem": "The rule 'hashes already at status=done are skipped without consuming budget' contradicts --reclassify, under which those hashes are exactly what is submitted to inference. Two valid readings: --reclassify --limit 2 re-does 2 images, or it does nothing forever.",
-      "fix": "Define budget by inference, not status: '--limit N caps images submitted to inference this run. Without --reclassify, done hashes are skipped before the budget is consulted. With --reclassify every processed image consumes budget, and the run advances in images.last_updated order (oldest first) so repeated runs sweep the card.' Extend E13 with two --reclassify --limit 2 runs asserting 4 distinct hashes got a new model_id/last_updated."
+      "section": "§6 GET /api/images",
+      "problem": "The query parameter `q` is listed in the route's parameter list and appears nowhere else in the document: no semantics (filename? species common name? scientific name? note?), no validation row in §10.2 (which validates every other parameter), and no assertion in E18. The implementer must invent it and whatever they invent is untested.",
+      "fix": "Either delete `q` from the route, or specify it: case-insensitive substring match over images.species_common, images.species_scientific and the basename of sources.path; max 128 chars with 422 above that; add the row to §10.2 and assert one hit plus one miss in E18."
     },
     {
       "id": 4,
       "severity": "MEDIUM",
-      "section": "§5.5 inference, §7.1 artifact, §7.4 calibration",
-      "problem": "Inference softmaxes with 'the artifact's calibration temperature', but only eval --calibrate ever fits one, and nothing says what train writes. The implementer must either invent artifact.get('temperature', 1.0) — a silent default for a required value, contra I7 — or ship train artifacts that classify cannot load (E7 classifies with a freshly trained artifact).",
-      "fix": "§7.1: train always writes \"temperature\": 1.0 with train.calibrated_from = None; artifact.load() treats a missing temperature key as a fatal AssetError naming eval --calibrate; only eval --calibrate writes a value != 1.0, into a new file (I8). Add temperature == 1.0 and calibrated_from is None to E7's artifact assertions."
+      "section": "§6 GET /api/images date filter, §10.2",
+      "problem": "exif_datetime is genuinely optional and stored NULL when absent (§5.2, §10.2). date_from/date_to are named but unspecified, so the natural SQL (exif_datetime >= :from) silently drops every NULL-dated image — the exact failure the document diagnoses at length for confidence ('would hide an entire class of images the moment a user touched the slider') and fixes with include_unscored/unscored_excluded one row above. Cards from a camera with a dead clock, and any exported frame, land in that bucket.",
+      "fix": "Mirror the confidence treatment: accept ISO-8601 YYYY-MM-DD, inclusive of the whole date_to day, 422 on unparseable and on date_from > date_to; NULL-dated rows match only when include_undated=true (default false); every /api/images response carries undated_excluded alongside unscored_excluded. Add both to §10.2 and assert the count in E18."
     },
     {
       "id": 5,
       "severity": "MEDIUM",
-      "section": "§5.8 slug(), §5.7 species_or_unknown, label regex ^[a-z0-9][a-z0-9_-]{0,63}$",
-      "problem": "slug() is defined only as lowercase + spaces->underscore, but real label sources contain apostrophes and periods (humanised CUB-200 names such as \"Brewer's Blackbird\" slug to brewer's_blackbird, which fails the regex) and --allow-new-labels admits arbitrary strings. The design says the result is 'validated' but never says what validation failure does — and the destination directory is a required value, so I7 forbids a fallback.",
-      "fix": "Publish the function beside the regex: NFKD-normalise, ASCII-fold, lowercase, collapse [^a-z0-9]+ to '_', strip leading/trailing '_', truncate to 64, and raise ConfigError if it fails LABEL_RE. Add to §7.1 that artifact.load() slugs every label entry up front and exits 3 on any invalid one, so a bad label space never reaches materialize."
+      "section": "§8 exit codes vs §10.1 failure table, E2/E16/E17",
+      "problem": "§8 defines exit 4 as 'completed with per-image failures or skips', while §10.1 classifies video, format_disabled, too_large, symlink and raw_not_enabled as 'not an error' at DEBUG. Both cover the same rows, so it is undefined which skips set the exit code. E16 asserts exit 4 for a card whose only abnormality is such skips; E2 asserts exit 0 for a 'mixed fixture card' and E17 exit 0 — a mixed card containing a video is simultaneously required to exit 0 and 4.",
+      "fix": "Split the classes in §8: exit 0 when only benign skips occurred (hidden, system_dir, unsupported_extension, format_disabled, video, raw_not_enabled, too_large, symlink); exit 4 when any image is failed or any skip is in {zero_bytes, unreadable, symlink_escape, too_large_pixels, decode_error}. Then state that E2's card carries benign skips only and E16's carries the 0-byte and truncated files."
     },
     {
       "id": 6,
       "severity": "MEDIUM",
-      "section": "§5.2 decode, §5.4 boxes, §5.9 images.width/height, §6 canvas overlay//thumb//full",
-      "problem": "'Original-image pixel coordinates' is ambiguous for EXIF-rotated photos: detection runs on the exif_transpose'd image, /full serves the original bytes (browser applies EXIF itself), and /thumb's orientation handling is unstated. Any mismatch draws every rotated photo's boxes sideways, and E18 (coordinates inside stored dimensions) holds in either frame so nothing catches it.",
-      "fix": "State once in §5.2 that all persisted geometry is in the EXIF-transposed frame: images.width/height = exif_transpose(im).size, all box coordinates and area_frac in that frame, /thumb generated from the transposed image, /full relying on an explicit image-orientation: from-image on the <img>. Add an orientation-6 fixture to E18 asserting width < height for a physically landscape file plus a box valid only in the transposed frame."
+      "section": "§5.8 retag(), §10.1 GUI re-tag row, E17",
+      "problem": "retag() treats a dest_path 'missing on disk' as 409 plus 'row marked failed'. But --dry-run writes the planned destination into dest_path with status='planned', so for every dry-run row the file legitimately does not exist. A user browsing a dry-run catalog (E17's exact state) who clicks a label flips a correct planned row to failed; /api/labels counts only status IN ('done','planned'), so the image disappears from the sidebar and verify gains a finding — all from a click with no write intent.",
+      "fix": "Guard on status before any mutation: if row.status == 'planned', return 409 {'error': 'this image was only planned (--dry-run); run classify without --dry-run before re-tagging', 'reason': 'planned'} and change nothing in the DB. Reserve the failed marking for a row that was done and whose file has genuinely vanished. Add the POST leg to E17: 409 reason='planned', row still planned, no overrides row written."
     },
     {
       "id": 7,
       "severity": "MEDIUM",
-      "section": "§5.1 scan skip reasons",
-      "problem": "too_large is enumerated as a scan reason but scan defines no size rule (the only threshold, 400 MP, belongs to decode), so an implementer invents a byte cap or leaves a dead reason. symlink_loop is unreachable with os.walk(followlinks=False). And symlinked regular files inside the card have no policy: os.walk yields them and open_source follows them, so a link pointing outside the card is silently ingested.",
-      "fix": "Either delete too_large from the scan list or define it (max_file_bytes, default 512 MiB, added to §3 and §10.2). Delete symlink_loop or redefine it as realpath escaping source. Add: 'a symlinked file inside the source tree is skipped with reason symlink unless --follow-source-symlinks is passed; symlinked directories are never descended.' Cover it in E16."
+      "section": "§7.1 artifact dict, §7.2 dataset.py, §5.3 crop",
+      "problem": "§7.2 states dataset.py 'crops with the same margin as inference (0.08) so train and inference see the same framing', but crop_margin is a config key (§3) validated over [0.0, 0.5] (§10.2) and §5.3 crops with the run's value. A user who sets crop_margin = 0.25 gets inference crops outside the artifact's training distribution, silently, with no way to detect it afterwards. The .acmodel is otherwise fully self-describing (input_size, normalize, temperature) and this is the one geometric parameter missing from it.",
+      "fix": "Add \"crop_margin\": 0.08 to the artifact dict beside input_size; train writes the value it used; inference uses the artifact's value, not the run config's, logging INFO when they differ (the artifact wins). Assert in E7 that the artifact records crop_margin and that classify --crop-margin 0.3 still crops at the artifact's 0.08."
     },
     {
       "id": 8,
       "severity": "MEDIUM",
-      "section": "§5.6 ebird_enrich, §4 module layout",
-      "problem": "ebird_enrich canonicalises against a 'static eBird-style table' that appears nowhere in the layout (only coco_animals.csv and cub200.csv) and has no schema or missing-name behaviour; and 'every candidate absent from the response' is undefined, though that matching rule is the entire behaviour of the 0.25 down-rank. eBird returns comName/sciName in its own orthography and CUB ships scientific = NULL for many classes, so this cannot be discovered by running it (api.ebird.org is 000 here).",
-      "fix": "Add taxonomy/data/ebird_aliases.csv (cub_key,ebird_com_name,ebird_sci_name) to §4. Define matching: a candidate matches an observation when ebird_sci_name equals sciName case-folded, else ebird_com_name equals comName case-folded with [^a-z0-9] stripped. Candidates with no alias row are exempt from the multiplier (absence from our table is not range evidence) and logged at DEBUG. Assert the exemption in E23."
+      "section": "§11.1 frozen expectation lists, E7",
+      "problem": "§11.1's bolded rule is 'List lengths are data-driven, not hard-coded' and §11.2 forbids 'never hard-code a list length again', but the fix was applied to coco_dominance.json only. The next row freezes coco_species.json at 20 images while recording that 24 qualify (re-measured: 24, exactly as claimed), and E7 asserts '>= 14/20'. Iteration 2's defect therefore survives in the second list: tighten the area_frac >= 0.20 or the 7-class filter below 20 qualifying images and the same dead end returns.",
+      "fix": "Apply the identical treatment: the builder emits all qualifying val-bucket single-animal images (24 today) and E7 asserts >= ceil(0.7 * len(species_list)) with the length read from the JSON (17 of 24 today). No literal 20 or 14 anywhere in test code."
     },
     {
       "id": 9,
       "severity": "MEDIUM",
-      "section": "§6 GET /api/labels vs GET /api/images, E18",
-      "problem": "Label counts are enumerated from output_root subdirectories while the grid comes from the catalog — two sources of truth for one fact. They diverge in states the design creates: after --dry-run every row is planned with no directories, so the sidebar is empty while /api/images returns rows (E17's exact state); a missing dest_path inflates rows over files with no way to surface it.",
-      "fix": "Make the catalog authoritative: /api/labels returns SELECT label, COUNT(*) FROM images WHERE status IN ('done','planned') GROUP BY label, each entry {label, count, files_on_disk} with the filesystem count as a visible cross-check (tool-internal entries ignored per §5.8). Assert both numbers in E18 and add a dry-run leg where files_on_disk == 0."
+      "section": "E7 thresholds, §11.2 remedies",
+      "problem": "E7 asserts both val_top1 >= 0.55 (crop-level, 7 classes, 128 px) and '>= 14/20 of the frozen single-animal val images receive their GT species label through the real CLI' — 0.70 image-level accuracy, after the min_species_confidence = 0.45 gate can turn a correct-but-unconfident top-1 into unknown and after MegaDetector's box replaces the GT box. A model landing exactly at the sanctioned 0.55 will plausibly miss 14/20, so E7 can fail while every stated threshold is met. §11.2 supplies a remedy for the val_top1 leg only and none for the identity leg.",
+      "fix": "State the relationship — the identity subset is deliberately easier (single animal, area_frac >= 0.20) — express the identity threshold as a derived fraction (finding 8's ceil(0.7 * len(list))), and record the sanctioned remedy for that leg: raise --input-size toward the shipped 224 and/or --epochs-finetune; never lower the fraction and never widen min_species_confidence for the test."
     },
     {
       "id": 10,
       "severity": "MEDIUM",
-      "section": "§6 GET /api/images/{sha256}/thumb",
-      "problem": "The thumb route has no defined input and no defined response when there is no readable file. dest_path leaves planned and missing-file rows undefined; the source tree would contradict §6's 'never serves bytes from the source tree' and put an SD-card read behind every tile. A dangling symlink destination — the normal state for --link users with the card removed — is also unspecified.",
-      "fix": "State: /thumb is generated from dest_path only, with exif_transpose applied (finding 6), then cached. status='planned', a missing dest_path or a dangling symlink target return 409 {\"error\": \"no readable materialized file for this image\"}, and the grid renders a placeholder for 409s. Add the planned and dangling-symlink cases to E17/E18."
+      "section": "§5.9 idempotency, resume and --limit",
+      "problem": "The re-processing policy covers done (skipped unless --reclassify) and planned/materializing (re-processed), but images.status also admits failed and skipped. Nothing says whether the next run retries a failed image, whether a transient decode/lock failure is retried forever, or whether a path in the skipped table is re-examined at all — it must be, since --raw or --formats may have changed since. E13 tests the killed-run resume but not the retry path.",
+      "fix": "Add one row per status to §5.9: done -> skipped unless --reclassify; planned/materializing -> re-processed; failed -> retried (the failure may have been transient, e.g. a lock or an OOM) and the retry consumes --limit budget; skipped paths -> always re-walked and re-evaluated against the current format policy, with the row upserted per finding 1. Assert in E13 that a failed row is retried on the next run and that a .cr2 skipped without --raw is ingested by a later --raw run."
     },
     {
       "id": 11,
       "severity": "MEDIUM",
-      "section": "§7.5 export-trainset, E25",
-      "problem": "Human overrides span the whole closed label set, so the common cases have no species and often no box: 'the dominant box of each image' does not exist for landscape/junk (no boxes) or multiple (no dominant box), and emitting label: \"junk\" into a species manifest would train the head on a non-species class — §7.2 makes box optional, so nothing rejects it.",
-      "fix": "§7.5: export only species-slug labels by default; skip multiple, landscape, junk, unknown and report them in a counted summary. --include-non-species emits landscape/junk as their own classes for a scene filter; multiple and unknown are never exported. A species-labelled image with no boxes is exported with box omitted. Extend E25 to assert a junk override yields no manifest line and is counted."
+      "section": "§3 defaults, §1, §12 build order",
+      "problem": "species_model = \"models/species.acmodel\" and bird_model = \"models/birds.acmodel\" are relative paths with no statement of what they resolve against (CWD? package root? output_root?). §1 says both artifacts are produced by the training subsystem, but §12 only produces E7's and E8's artifacts inside tests and step 3 lands classify with 'a pass-through classifier'. So it is undefined what a fresh clone does on `animal-classifier classify /card`, which command produces the shipped pair, and whether a missing bird_model is fatal for a user who never photographs a bird.",
+      "fix": "State three things: (a) relative model paths resolve against the current working directory and the resolved absolute path appears in every error message; (b) a missing species_model is fatal exit 3 naming the exact `animal-classifier train` invocation that produces it, and §12 gains a documented 'produce the shipped artifacts' step with that command line; (c) a missing bird_model is fatal only when the bird path is reachable, otherwise a startup WARNING that refinement is disabled with provider_status='no_bird_model' recorded. Cover (b) in E22."
     },
     {
       "id": 12,
-      "severity": "MEDIUM",
-      "section": "§11.2 closing note, §11.1 frozen lists",
-      "problem": "The sanctioned remedy for an E4 failure is to re-freeze at GT ratio > 4.0, but I measured only 19 val-bucket images above that ratio (79 total) — the design's own number — while §11.1 fixes the high list at 20 entries. The documented escape hatch is arithmetically impossible, leaving only the two moves the design forbids (lower the ratio in test code, or break the leakage rule).",
-      "fix": "Make the remedy executable: either 're-freeze high at ratio > 4.0 with len(high) = 19 and assert >= 15/19', or make the list data-driven — 'high contains all val-bucket images above the threshold (22 at > 3.0, 19 at > 4.0) and the assertion is >= ceil(0.8 * len(high))' — removing the hard-coded 20."
+      "severity": "NIT",
+      "section": "§5.2 blur metric, §5.7",
+      "problem": "§5.2 downscales only when the long edge exceeds 512 px and stores blur_ref_edge 'so two scores are only ever compared with their reference edge in view', but §5.7 compares every score against the fixed 100.0 regardless of that edge, so a 320 px image and a 512 px-normalised one are judged on different scales.",
+      "fix": "Define blur_threshold as calibrated at the 512 px reference and state that smaller images are scored at native resolution on a slightly different scale (accepted, with E11's small-sharp-image leg as the guard), or normalise the score by blur_ref_edge / 512."
     },
     {
       "id": 13,
-      "severity": "MEDIUM",
-      "section": "§5.8 --hardlink, §10.3 I1, E3",
-      "problem": "I1's proof that the source is never written is entirely path-based, but a hardlinked destination is the card's inode (E3 asserts st_ino equality), so any in-place write through ~/animal_pics would modify the SD card while passing every guard. Nothing writes into materialized files today, which makes this an unstated precondition rather than a bug — and re-tag (finding 1) is the first feature that touches existing destinations.",
-      "fix": "Add to §5.8 and I1: 'In --hardlink mode a destination and its source share an inode, so no code path ever opens a materialized file for writing or truncates it; the only permitted operations on an existing destination are os.replace and os.unlink, which affect the directory entry only. verify --fix and GUI re-tag comply.' Add a hardlink leg to E1, which currently runs only in copy mode."
+      "severity": "NIT",
+      "section": "§5.4 inference snippet",
+      "problem": "new_shape=1280, conf_thres=0.20 and iou_thres=0.45 appear as literals where §3 defines detector_image_size, detector_confidence and detector_iou as config keys.",
+      "fix": "Write the snippet against the config values (config.detector_image_size, config.detector_confidence, config.detector_iou) so the literals are not shipped."
     },
     {
       "id": 14,
-      "severity": "MEDIUM",
-      "section": "§6 GET /api/images min_conf/max_conf, §5.9 images.confidence, §10.2",
-      "problem": "landscape, junk, multiple and degenerate unknown rows have no meaningful confidence (presumably NULL, never stated). In SQL, confidence >= :min silently excludes NULL, so a confidence-band filter would make an entire class of images invisible with no indication — the opposite of the 'nothing is discarded' property the label set exists for.",
-      "fix": "§5.9: state that images.confidence is NULL exactly for landscape, junk, multiple and any unknown with no classifiable box. §6: 'a confidence filter matches NULL-confidence rows only when include_unscored=true (default false), and every response carries unscored_excluded: <count>' so the UI can say 'N images have no confidence score'. Assert that count in E18."
+      "severity": "NIT",
+      "section": "§5.4 NMS, §5.7",
+      "problem": "max_det=100 is hard-coded, undocumented and not configurable. With no area floor (correctly), a herd photo can exceed 100 detections and the dropped boxes can in principle flip a multiple decision.",
+      "fix": "Name it in §3 as detector_max_det = 100 with a validation row, and note in §5.7 that it is a detector cap, not a size gate."
     },
     {
       "id": 15,
       "severity": "NIT",
-      "section": "§5.9 vs §6",
-      "problem": "§5.9 says runs.source_root is read by 'gui and verify', but §6 removed the GUI's source-serving mode, so the GUI has no stated use for the value — conflicting information between sections.",
-      "fix": "Drop gui from that sentence, or state its only use (displaying the card path in the GUI header)."
+      "section": "E16",
+      "problem": "E16 asserts an over-cap file has 'its bytes never read', which is not portably observable from a test.",
+      "fix": "Assert the observable consequences instead: skipped(too_large), no images/sources row for that path, and no DecodeError in stderr."
     },
     {
       "id": 16,
       "severity": "NIT",
-      "section": "§8 verify, exit-code table",
-      "problem": "verify is documented as exiting 'non-zero' without mapping onto the defined codes (1 IO, 3 asset/config, 4 per-image failures), and E24 asserts only non-zero.",
-      "fix": "State: missing or unloadable asset -> 3; catalog/filesystem inconsistency (reportable, --fix-able) -> 4. Assert the specific codes in E24."
+      "section": "§6 GET /api/labels",
+      "problem": "status IN ('done','planned') excludes exactly the materializing pending-move state §5.8 creates, so a crashed re-tag makes an image vanish from the sidebar while its file is still on disk under the old label, inflating the files_on_disk != count warning.",
+      "fix": "Include materializing in the count, or surface it as a separate in-flight number the frontend shows."
     },
     {
       "id": 17,
       "severity": "NIT",
-      "section": "§5.6 --force-bird-head",
-      "problem": "The flag runs the bird head on every animal crop and the merge rule replaces the coarse row whenever the bird head clears the gate, so a zebra crop can be filed as a CUB bird species in a diagnostic run.",
-      "fix": "Document it as diagnostic-only: one WARNING per run stating that non-bird crops may be relabelled, with the flag recorded in runs.config_json (already specified) so affected labels are identifiable."
+      "section": "§5.9 sources upsert, E14",
+      "problem": "The content-changed-in-place upsert and the rule that the previous images row and destination are retained are specified but exercised by no test in E1-E26.",
+      "fix": "Extend E14: rewrite a card file's content in place between two runs, then assert one sources row, two images rows, and both destination files intact."
     },
     {
       "id": 18,
       "severity": "NIT",
-      "section": "§5.9 runs table, §6 GET /api/run",
-      "problem": "run_id has no defined format although it is a primary key written into every images row, and 'newest runs row' has no defined ordering.",
-      "fix": "run_id = uuid4().hex, or f\"{started_at:%Y%m%dT%H%M%SZ}-{uuid4().hex[:8]}\" for sortability; define 'newest' as ORDER BY started_at DESC LIMIT 1."
+      "section": "§5.3, §10.2",
+      "problem": "The 2 px degenerate-crop constant is the one size-related constant in the pipeline and is absent from §10.2's validation table, where every other threshold is listed. It is well justified in §5.3 and correctly does not affect dominance, but it is invisible where a reader looks for size rules.",
+      "fix": "Add a row to §10.2 stating it is a fixed, non-configurable resize precondition that yields species_status='degenerate', not a gate on labelling."
     },
     {
       "id": 19,
       "severity": "NIT",
-      "section": "§5.9 schema",
-      "problem": "candidates(box_id, rank, ...) has only a foreign key, so duplicate (box_id, rank) pairs are legal and per-box lookups scan; boxes and images lack indexes for the GUI's grouped queries.",
-      "fix": "PRIMARY KEY(box_id, rank) on candidates, plus CREATE INDEX idx_boxes_sha ON boxes(sha256) and CREATE INDEX idx_images_label ON images(label)."
-    },
-    {
-      "id": 20,
-      "severity": "NIT",
-      "section": "§5.8 label directories, §6 --allow-new-labels",
-      "problem": "multiple, landscape, junk and unknown are ordinary directories; nothing forbids a species slug or a user-supplied label from colliding with a reserved name.",
-      "fix": "Reject reserved names in artifact.load() (fatal exit 3, alongside finding 5's slug validation) and in the GUI label validator (HTTP 422)."
+      "section": "§6 new labels, E21",
+      "problem": "E21 asserts \"Brewer's Blackbird\" -> 422, so a user correcting a bird must know to type brewer_s_blackbird; nothing in the GUI offers the slug.",
+      "fix": "Have the label picker list known labels from /api/labels plus the artifact label space, displaying common and submitting key, and state that the API deliberately accepts slugs only."
     }
-  ],
-  "verifiedAssumptions": [
-    "models/md_v5a.0.0.pt is 280766885 bytes with sha256 94e88fe97c8050f2e3d0cc4cb4f64729d639d74312dcbe2f74f8eecd3b01b276 (recomputed).",
-    "MegaDetector loads via the models/utils alias shim with weights_only=False; names=['animal','person','vehicle'], stride=[8,16,32,64], forward -> (1, 25500, 8) on CPU (reproduced).",
-    "§2.1's central claim holds: with roboflow and sahi blocked at import (sys.meta_path raising ImportError), import yolov5, letterbox, non_max_suppression, scale_boxes, the checkpoint load and a 640x640 forward all succeed and neither module is imported.",
-    "The uv override-dependencies trick resolves as designed: uv pip compile on the exact §2.1 pyproject yields opencv-python-headless==5.0.0.93, typer==0.27.2, torch==2.14.0, timm==1.0.29, pillow==12.3.0, pillow-heif==1.7.0, numpy==2.5.3, setuptools==80.10.2, ultralytics==8.4.153, rawpy==0.27.1, pytest==9.1.1 and no opencv-python/roboflow/sahi (110 lines with --all-extras vs 109 base packages claimed).",
-    "pillow-heif==1.7.0 with pillow 12.3.0 on py3.12 encodes HEIF and re-opens it (libheif 1.23.3) — E16's HEIC fixture is buildable, and the iteration-1 pi-heif blocker is genuinely resolved.",
-    "COCO: 2700 animal annotations - 34 iscrowd = 2666 over 1016 images; per-class counts bird 427, cow 372, sheep 354, horse 272, zebra 266, elephant 252, giraffe 232, dog 218, cat 202, bear 71 — all identical to DESIGN.md.",
-    "7 non-crowd animal boxes have a sub-2px side, smallest area_frac 1.2426814988e-05 (design: 0.00001243).",
-    "471 multi-animal images split 235 dominant / 236 multiple at dominance_ratio 1.6.",
-    "split_for (basename-keyed sha1 % 5) gives 813 train / 203 val over the 1016 animal images.",
-    "Frozen-list availability under the leakage rule: ratio > 3.0 -> 104 total / 22 val; ratio < 1.3 -> 149 total / 29 val; ratio > 4.0 -> 79 total / 19 val.",
-    "E7 crop counts 1625 train / 349 val over the seven classes; val majority baseline 0.229 (bird 80); bear has 11 val instances, confirming no recall threshold can be asserted on it.",
-    "coco_species.json is satisfiable: 24 val-bucket images with exactly one non-crowd animal, area_frac >= 0.20, class in E7's seven.",
-    "All offline assets the design depends on are present: models/backbones/{efficientnet_b0_ra-3dd342df,convnext_nano_d1h-7eb4bdea}.pth and data/raw/{CUB_200_2011.tgz,val2017.zip,annotations_trainval2017.zip,annotations/instances_val2017.json}.",
-    "No design path depends on a RECON-blocked host; api.ebird.org is opt-in, disabled by default, and its unreachability is recorded as provider_status='unreachable'."
-  ],
-  "unverifiedAssumptions": [
-    "E7's val_top1 >= 0.55 from 2+2 epochs at input 128 on 1625 crops, and its < 20 min CPU wall clock — plausible given the measured class balance, but unproven.",
-    "E10's synthetic val_top1 >= 0.90 in < 90 s with a ~180k-param tinycnn — unproven, low risk.",
-    "E4's >= 16/20 aggregates against real MegaDetector output: the ground truth is verified but the detector has not been run over these 40 images; finding 12 matters because this threshold is the likeliest to move.",
-    "efficientnet_b0 used at 128 px is off its 224 px pretrained config — architecturally fine, an accuracy risk for E7; §7.3 should state it is a CPU-budget trade-off for E7 only, with the shipped default at 224.",
-    "ebird_enrich's 0.25 multiplier and dist=50&back=30 query cannot be validated here (api.ebird.org is 000) and are honestly labelled as chosen constants in §13.4; the matching rule they act on still needs specifying (finding 8).",
-    "typer 0.27.2's exact shape for a repeatable --formats and the hand-rolled --link/--hardlink mutual exclusion (exit 2) is not exercised anywhere.",
-    "The GUI's 409-on-contention path depends on SQLite BEGIN IMMEDIATE under WAL with an unstated GUI busy_timeout; name it (suggest 250 ms) so E19 provokes the 409 deterministically instead of racing the writer's 10 s."
   ],
   "reviewDoc": "/projects/sandbox/AnimalImageClassifier/docs/design-review.md"
 }

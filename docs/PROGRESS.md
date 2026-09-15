@@ -434,3 +434,88 @@ step     -> PROGRESS.md            : this entry
 
 Next: the design is ready for another cold review pass; nothing in it now depends on a
 RECON-blocked host, and every threshold that could move has a documented, executable remedy.
+
+## 2026-09-15 21:11 UTC — design review iteration 3 (cold): CHANGES_REQUESTED (0 HIGH / 11 MEDIUM / 8 NIT)
+
+Reviewed `docs/DESIGN.md` iteration 3 (1,542 lines) fresh, against `PLAN.md` and `RECON.md`, with no
+context from the step that wrote it. Wrote `docs/design-review.md` (narrative) then
+`docs/design-review.json` (gate). **Verdict `CHANGES_REQUESTED`: 11 MEDIUM, 8 NIT, no HIGH, and no
+blocking condition tripped.**
+
+**All six blocking conditions are clear, and I checked each by grep rather than by reading the
+document's own claims:** every one of the 7 `min_box_area`/area-floor mentions is an explicit negation
+(`dominance_ratio` remains the only size gate; `max_file_bytes` is walled off in `scan.py` where it
+structurally cannot see a box); `tests/e2e` only, with the two doubles both sitting on external
+boundaries; the three blocked-host mentions are all "never do this" or "on the user's machine"; the
+source tree is read-only with I1 now covering the `--hardlink` aliased-inode case; I7 is structural;
+and every mandated component is present (MegaDetector v5a, own finetuned model + `train`, the
+three-implementation bird provider, the closed label set, atomic writes, copy/`--link`/`--hardlink`,
+sha256 idempotency, SQLite catalog, GUI on 127.0.0.1:8765 with a re-tag that MOVES, the six-command
+typer CLI, the format policy).
+
+**I re-measured every quantitative claim instead of trusting the fact table** — probe committed as
+`scripts/recon/verify_design_facts.py`, which reuses the design's own published `split_for()`. **All 15
+numbers matched exactly**: 2,666 non-crowd instances / 34 crowd, 1,016 images, per-class counts
+(`bird 427 … bear 71`), 813/203 split, 471 multi-animal, 235/236 at the 1.6 gate, val-bucket 22 at
+ratio > 3.0 and 19 at > 4.0 and 29 at < 1.3 (so E4's `ceil(0.8×n)` = 18/16/24), 24 `coco_species`
+candidates, 1,625/349 seven-class crops, 0.229 majority baseline, 11 `bear` val instances. The
+iteration-3 fact table is trustworthy.
+
+**Three claims turned out to be wrong, and two of them were found only by reading the real data:**
+- **CUB names carry no apostrophes.** §5.8 justifies `slug()` with "`Brewer's Blackbird`,
+  `Le Conte's Sparrow`". The archive's actual `classes.txt` is `001.Black_footed_Albatross`,
+  `022.Chuck_will_Widow` — already underscored, numerically prefixed. Since §7.2 takes the label from
+  the directory name, the user would get `~/animal_pics/022_chuck_will_widow/`, against PLAN.md's
+  `~/animal_pics/lion` (finding 2).
+- **"List lengths are data-driven, not hard-coded"** is true of `coco_dominance.json` only;
+  `coco_species.json` is still frozen at 20 of 24 with E7 asserting `>= 14/20` — iteration 2's defect
+  surviving in the second list (finding 8).
+- **"train and inference see the same framing"** holds only while `crop_margin` keeps its default,
+  which the config explicitly permits changing, and the artifact does not record it (finding 7).
+
+**One defect I reproduced rather than argued.** The published schema's `skipped(path TEXT PRIMARY KEY)`
+has no upsert (unlike `sources`, which has one spelled out). Created the exact schema on sqlite 3.40.0
+and re-inserted a skipped path: `IntegrityError -> UNIQUE constraint failed: skipped.path`. Every second
+run over a card containing a video walks into it, which is E13 and E16 (finding 1). Also verified
+positively: the schema creates cleanly with `rank`/`idx` as column names, and `slug()` behaves exactly
+as published (`brewer_s_blackbird`, `nandu`, raises on `'熊'` and whitespace, truncates at 64).
+
+**The remaining MEDIUMs cluster in what iteration 3 added:** `q` is named once and never defined
+(finding 3); `date_from`/`date_to` reintroduce the NULL-silent-drop bug that `include_unscored` was
+invented to fix one paragraph earlier (finding 4); exit 4 "or skips" contradicts §10.1's "not an error"
+so E2 and E16 cannot both pass (finding 5); re-tagging a `--dry-run` row flips a healthy `planned` row
+to `failed` and hides it from the sidebar (finding 6); the re-processing policy omits `failed` and
+`skipped` (finding 10); and nothing says how the shipped `.acmodel` pair comes to exist or what its
+relative path resolves against (finding 11). E7's `val_top1 >= 0.55` and its `>= 14/20` identity leg are
+also unreconciled, with a sanctioned remedy for only one of them (finding 9).
+
+Component relationships for this step:
+
+```
+docs/DESIGN.md  ─┐
+docs/PLAN.md    ─┼─→ (this step: cold review) ─→ docs/design-review.md ─→ docs/design-review.json
+docs/RECON.md   ─┘              │                                              (gate: verdict)
+                                ├─→ scripts/recon/verify_design_facts.py (new, read-only)
+                                └─→ docs/PROGRESS.md (this entry)
+   ^                    ^                      ^
+data/raw/annotations   data/raw/CUB_200_2011.tgz   models/ + models/backbones/
+(recount all 15 facts) (real classes.txt names)    (assets exist, sizes match RECON)
+```
+
+Sequence:
+
+```
+step -> DESIGN/PLAN/RECON            : read all 1542 + 151 + 320 lines
+step -> grep DESIGN.md               : audit the 6 blocking conditions directly
+step -> COCO annotations             : re-measure all 15 numbers via the design's split_for
+step -> CUB_200_2011.tgz classes.txt : read the REAL label strings -> finding 2
+step -> sqlite3 + published schema    : reproduce the skipped-table IntegrityError -> finding 1
+step -> published slug()             : run it on real awkward names (verified correct)
+step -> design-review.md             : narrative, findings, verified/wrong assumptions
+step -> design-review.json           : gate JSON (verdict CHANGES_REQUESTED)
+step -> PROGRESS.md                  : this entry
+```
+
+Next: the loop returns to the design step for iteration 4. No HIGH and no blocker, so the 11 MEDIUMs
+are all small, local edits — six of them are one clarifying rule each, and the two schema/label ones
+(findings 1 and 2) are the only changes with implementation consequences.
