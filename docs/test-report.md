@@ -1,7 +1,7 @@
 # E2E test report
 
-**Run timestamp:** 2026-09-15 21:54 UTC
-**Branch:** `feat/safari-classifier` @ `a8103ab`
+**Run timestamp:** 2026-09-15 22:14 UTC
+**Branch:** `feat/safari-classifier` @ `c87a690`
 
 ## 1. Commands run
 
@@ -9,12 +9,12 @@
 cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v
 ```
 
-Two supporting read-only commands were run to characterise the result (no source or test file
-was edited, and `uv sync` was not needed — the environment resolved and ran as-is):
+`uv sync` was **not** needed — the environment resolved and ran as-is. Two supporting read-only
+commands were run to characterise the result (no source or test file was edited):
 
 ```
-cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v --collect-only
-find tests -type f -name '*.py' -not -path 'tests/e2e/*' -not -path '*__pycache__*'
+find /projects/sandbox/AnimalImageClassifier/tests -type f -name '*.py' | sort
+git -C /projects/sandbox/AnimalImageClassifier status --short
 ```
 
 ## 2. Verbatim output
@@ -28,65 +28,69 @@ cachedir: .pytest_cache
 rootdir: /projects/sandbox/AnimalImageClassifier
 configfile: pyproject.toml
 plugins: anyio-4.15.1
-collecting ... collected 0 items
+collecting ... collected 7 items
 
-============================ no tests ran in 0.01s =============================
+tests/e2e/test_cli_surface.py::test_top_level_help_lists_every_command PASSED [ 14%]
+tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[classify] PASSED [ 28%]
+tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[gui] PASSED [ 42%]
+tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[train] PASSED [ 57%]
+tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[eval] PASSED [ 71%]
+tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[export-trainset] PASSED [ 85%]
+tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[verify] PASSED [100%]
+
+============================== 7 passed in 1.00s ===============================
 ```
 
-Process exit code: **5** (`pytest` `EXIT_NOTESTSCOLLECTED`).
+Process exit code: **0**.
 
-`uv run pytest tests/e2e -v --collect-only` — complete, untruncated:
-
-```
-============================= test session starts ==============================
-platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /projects/sandbox/AnimalImageClassifier/.venv/bin/python3
-cachedir: .pytest_cache
-rootdir: /projects/sandbox/AnimalImageClassifier
-configfile: pyproject.toml
-plugins: anyio-4.15.1
-collecting ... collected 0 items
-
-========================= no tests collected in 0.00s ==========================
-```
-
-Process exit code: **5**.
-
-Unit-test scan under `tests/` outside `tests/e2e/` — complete output (the command printed
-nothing between the markers, i.e. no matching files):
+Test-file inventory under `tests/` — complete output:
 
 ```
-=== unit-test scan (files under tests/ outside tests/e2e) ===
-(end scan)
+/projects/sandbox/AnimalImageClassifier/tests/e2e/conftest.py
+/projects/sandbox/AnimalImageClassifier/tests/e2e/test_cli_surface.py
 ```
+
+`git status --short` printed nothing (clean tree) before this step's own writes.
 
 ## 3. Summary
 
 | Result | Count |
 |---|---|
-| passed | 0 |
+| passed | **7** |
 | failed | 0 |
 | errored | 0 |
 | skipped | 0 |
-| **collected** | **0** |
+| **collected** | **7** |
 
-There were **no failures and no collection errors**. There were also **no tests**: the suite is
-empty. `tests/e2e/` contains exactly one file, `conftest.py`, and it defines no fixtures yet —
-only a module docstring. So there is no test whose name, assertion, or responsible source file
-could be reported, and nothing in this run can be described as passing.
+**No failures and no collection errors**, so there is no failing test name, assertion message, or
+responsible source file to report. Exit code 0, up from the previous run's 5 (empty suite).
 
-**Why the suite is empty (not a regression).** `docs/impl-status.json` records `done_items: 2` of
-`total_items: 26` with `current_chunk: "3. catalog.py ..."`, and `docs/PROGRESS.md` states that the
-first e2e tests land in chunk 9. `src/animal_classifier/` currently holds only `__init__.py`,
-`errors.py`, `config.py` and `cli.py`. An empty suite is therefore the expected state at chunk 2,
-and the chunk-2 gate quoted in `PROGRESS.md` explicitly asks for zero failures rather than for
-collected tests.
+**What these 7 tests actually prove — and what they do not.** All 7 come from one file,
+`tests/e2e/test_cli_surface.py`, and all 7 exercise `--help` output only:
 
-**Exit code caveat for the caller.** Because pytest exits **5** on an empty suite rather than 0,
-any CI or workflow gate that treats a non-zero exit as failure will report this run as failing even
-though nothing is broken. This will stop being an issue as soon as chunk 9 lands the first test.
+- `test_top_level_help_lists_every_command` — `--help` exits 0 and names all six commands
+  (`classify`, `gui`, `train`, `eval`, `export-trainset`, `verify`).
+- `test_no_command_offers_an_area_floor[<command>]` (×6) — per-command `--help` exits 0 and
+  contains none of 10 spellings of an absolute area floor (`min-box-area`, `min_box_area`,
+  `min-area`, `min_area`, `area-floor`, `area_floor`, `min-animal-area`, `min_animal_area`,
+  `min-box-frac`, `min_box_frac`).
 
-**Spec compliance (e2e only).** No violation. The scan found zero `.py` files under `tests/`
-outside `tests/e2e/`, and `pyproject.toml` pins `testpaths = ["tests/e2e"]`. Nothing was deleted.
+That is the executable guard on DESIGN.md invariant I2 (no `min_box_area`; `dominance_ratio` is the
+only size gate), which is a standing user requirement — so it is worth having green this early. But
+it is the CLI-surface leg of **E6 only**. This run does **not** exercise detection, classification,
+the dominance rule, materialization, the catalog, the GUI, training, or the bird providers. Per the
+file's own docstring, E6's full form (a real `classify` run over the fixture card asserting the
+dominance rule decides alone) lands in chunk 9. No claim about pipeline behaviour is supported by
+this output.
 
-**Blocked:** nothing in this step. The suite cannot demonstrate behaviour until the `code` step
-reaches chunk 9; that is a sequencing fact, not a blocker on testing.
+**Progress context (from `docs/impl-status.json`, not inferred).** `done_items: 3` of
+`total_items: 26`, `current_chunk: "4. taxonomy/: slug(), LABEL_RE, RESERVED_LABELS and the static
+name tables"`. 7 passing CLI tests at chunk 3 is the expected state; E1–E26 are not yet written.
+
+**Spec compliance (e2e only).** No violation. `tests/` contains exactly two `.py` files, both under
+`tests/e2e/` (`conftest.py`, `test_cli_surface.py`). No unit-test file exists anywhere under
+`tests/` outside `tests/e2e/`, and `pyproject.toml` pins `testpaths = ["tests/e2e"]`. Nothing was
+deleted.
+
+**Blocked:** nothing in this step. The suite runs, collects, and passes. Coverage breadth is a
+sequencing fact (chunk 3 of 26), not a blocker on testing.

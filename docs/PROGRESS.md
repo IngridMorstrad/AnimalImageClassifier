@@ -928,3 +928,40 @@ Nothing is blocked. Still unproven by an e2e test: everything the catalog exists
 `classify` run needs `scan.py`, `images.py`, `detect/`, `decide.py` and `materialize.py` (chunks
 5-8), so DEFECT 1's regression test arrives with E13 in chunk 10 as planned. 23 of 26 chunks remain,
 so `impl-status.json` `complete` stays `false`.
+
+---
+
+## 2026-09-15 22:14 UTC — test step — real e2e run: 7 passed, 0 failed, exit 0
+
+Command actually run (nothing else; no source or test file edited, `uv sync` not needed):
+
+```
+cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v
+```
+
+Real counts from the captured output: **7 passed, 0 failed, 0 errored, 0 skipped**, 7 collected,
+1.00 s, **exit code 0**. Verbatim stdout is in `docs/test-report.md` §2, untruncated. This is the
+first non-zero-exit-0 suite: the previous run (21:54 UTC) collected 0 tests and exited 5.
+
+All 7 tests come from `tests/e2e/test_cli_surface.py` and assert on `--help` output only —
+`test_top_level_help_lists_every_command` (all six commands present, exit 0) and
+`test_no_command_offers_an_area_floor` parametrized over the six commands, each checking that
+`<command> --help` exits 0 and contains none of 10 spellings of an absolute area floor. So
+**invariant I2 now has a green executable guard**: if anyone reintroduces `min_box_area` under any
+name, the suite fails immediately rather than waiting for review.
+
+Scope honesty: this run proves nothing about detection, the dominance rule, materialization, the
+catalog, the GUI, training, or the bird providers. It is the CLI-surface leg of E6; E6's full form
+(a real `classify` over the fixture card) lands in chunk 9. `impl-status.json` reads
+`done_items: 3` / `total_items: 26`, `current_chunk: 4 (taxonomy/)`, so 7 CLI tests is the expected
+state here, not a coverage regression.
+
+Spec compliance: **no violation**. `tests/` holds exactly two `.py` files, both under `tests/e2e/`
+(`conftest.py`, `test_cli_surface.py`); no unit test exists outside `tests/e2e/`, and
+`pyproject.toml` still pins `testpaths = ["tests/e2e"]`. Nothing deleted.
+
+### Blocked / not yet proven
+
+**Nothing blocked.** No failure to hand to the `code` step. Unproven by any e2e test so far:
+everything past the CLI surface — chunks 4-26, including E1-E5 and E7-E26. 23 of 26 chunks remain,
+so `impl-status.json` `complete` stays `false`.
