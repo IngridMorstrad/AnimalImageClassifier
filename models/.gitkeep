@@ -1,0 +1,1 @@
+# Model artifacts land here at runtime. Weights are never committed (see .gitignore).

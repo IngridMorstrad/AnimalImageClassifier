@@ -1,0 +1,22 @@
+[project]
+name = "animal-classifier"
+version = "0.1.0"
+description = "Detect, classify and file safari photographs by animal species"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.12",
+]
+
+[project.scripts]
+animal-classifier = "animal_classifier.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/animal_classifier"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/e2e"]

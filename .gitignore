@@ -1,0 +1,21 @@
+# Python environments and caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Model weights — never committed
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# Catalog / databases
+*.sqlite
+*.db
+
+# Generated test and run output
+tests/**/output/
+tests/**/_output/
+build/
+dist/
+*.egg-info/
