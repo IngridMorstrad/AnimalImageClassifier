@@ -45,7 +45,7 @@ dominance, materializes by copy/link/hardlink, and records everything in SQLite 
 committed fixtures, with the scripted detector and a pass-through classifier. No model training,
 no GUI yet.
 
-- [ ] 1. **Dependency contract and the three probes on the locked env.** Rewrite
+- [x] 1. **Dependency contract and the three probes on the locked env.** Rewrite
       `pyproject.toml` exactly as DESIGN.md §2.1 (`requires-python = ">=3.12,<3.14"`, the pinned
       dependency list, `[project.optional-dependencies] raw`/`dev`, and the `[tool.uv]
       override-dependencies` that drop `opencv-python`, `roboflow` and `sahi`); add
@@ -64,7 +64,7 @@ no GUI yet.
       `/projects/sandbox/AnimalImageClassifier/docs/RECON.md` under a dated "re-verified" note
       (append only — do not rewrite RECON's measurements).
 
-- [ ] 2. **`errors.py` + `config.py`: total validation, layered resolution, fail-loud.**
+- [x] 2. **`errors.py` + `config.py`: total validation, layered resolution, fail-loud.**
       `errors.py` defines `ConfigError`, `AssetError`, `DecodeError`, `MaterializeError`,
       `CatalogError` with the exit codes of DESIGN.md §10.1 (`0/1/2/3/4`). `config.py` exposes a
       frozen `Config` dataclass and `Config.resolve(...)` implementing CLI → env

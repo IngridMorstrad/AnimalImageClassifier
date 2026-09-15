@@ -634,3 +634,148 @@ step -> docs/PROGRESS.md        : this entry
 
 Next: the build loop starts at chunk 1 (dependency contract + the three probes), then chunks 2–8, and
 the first green e2e run is chunk 9 (`classify` on the fixture card: E2, E5, E6, E26).
+
+---
+
+## 2026-09-15 21:51 UTC — build iteration 1: chunks 1 and 2 (dependency contract; errors.py + config.py)
+
+`docs/build-review.json` did not exist, so this was the first build iteration: no blocking findings to
+fix, start at the first unchecked chunk of `docs/IMPL-PLAN.md`.
+
+### Chunk 1 — dependency contract and the three probes (DONE)
+
+`pyproject.toml` rewritten exactly to DESIGN.md §2.1: `requires-python = ">=3.12,<3.14"`, the 13
+pinned runtime dependencies, `[project.optional-dependencies] raw = ["rawpy==0.27.1"]` /
+`dev = ["pytest==9.1.1"]`, and the `[tool.uv] override-dependencies` that drop `opencv-python`,
+`roboflow` and `sahi` via a marker that can never be true. Added `.python-version` containing `3.12`.
+`[tool.pytest.ini_options]` keeps `testpaths = ["tests/e2e"]` and gains `addopts = "-ra"` plus the
+`slow` marker. `uv.lock` regenerated and committed.
+
+Real output — `uv lock` then `uv sync --frozen --extra dev` (tail):
+
+```
+ + pytest==9.1.1
+ - requests-toolbelt==1.0.0
+ - roboflow==1.4.2
+ - sahi==0.12.6
+ - shapely==2.1.2
+ + starlette==1.6.0
+ + uvicorn==0.39.0
+```
+
+Real output — installed versions in the synced venv (`uv run --frozen python -c "importlib.metadata"`):
+
+```
+torch==2.14.0            typer==0.27.2        setuptools==80.10.2
+torchvision==0.29.0      pillow==12.3.0       pytest==9.1.1
+timm==1.0.29             pillow-heif==1.7.0   absent (good): opencv-python
+numpy==2.5.3             fastapi==0.141.1     absent (good): roboflow
+yolov5==7.0.14           uvicorn==0.39.0      absent (good): sahi
+opencv-python-headless==5.0.0.93              httpx==0.28.1
+```
+
+Real output — the three RECON probes, re-run against that venv:
+
+```
+### probe_md_checkpoint
+torch 2.14.0+cu130
+checkpoint /projects/sandbox/AnimalImageClassifier/models/md_v5a.0.0.pt (280766885 bytes)
+LOAD OK: top-level type = <class 'dict'>
+  model class = models.yolo.DetectionModel
+  model parameters = 140,054,656
+  model.names = ['animal', 'person', 'vehicle']
+  model.stride = tensor([ 8., 16., 32., 64.])
+
+### probe_md_inference
+forward OK in 0.92s on CPU
+  raw prediction tensor shape = (1, 25500, 8)
+  class names = ['animal', 'person', 'vehicle']
+
+### probe_backbones
+timm 1.0.29 / torch 2.14.0+cu130
+efficientnet_b0: LOAD OK params=5,288,548 missing=0 unexpected=0 logits=(1, 1000)
+convnext_nano: LOAD OK params=15,593,560 missing=0 unexpected=0 logits=(1, 1000)
+```
+
+All three reproduce RECON's original measurements and **no pin moved**, so the verified environment is
+intact. A dated, append-only "re-verified" note recording this (including the harmless 113-vs-109
+package-count difference, which is the lockfile counting the root project and the `raw`/`dev` extras)
+was added to the end of `docs/RECON.md`.
+
+### Chunk 2 — `errors.py` + `config.py` (DONE)
+
+`src/animal_classifier/errors.py`: `AnimalClassifierError` base carrying the exit code as a class
+attribute, with `ConfigError` (3), `AssetError` (3), `DecodeError` (4), `MaterializeError` (1) and
+`CatalogError` (3), plus the named constants `EXIT_OK/UNEXPECTED/USAGE/CONFIG/PARTIAL` = 0/1/2/3/4.
+A single call site may override the code where §10.1 gives one failure a different class (the
+cross-filesystem `--hardlink` `EXDEV` is a config error, not an IO error).
+
+`src/animal_classifier/config.py`: frozen (`slots=True`) `Config` dataclass + `Config.resolve()`
+implementing CLI → env (`ANIMAL_CLASSIFIER_*`) → TOML → default, the §3.1 `formats` family policy,
+`--device` resolution, the nesting guard in both directions plus identical, the fatal unknown-TOML-key
+check, a fatal missing `--config`, and the §10.2 range checks. `catalog_path` is always
+`<output_root>/.catalog.db`; `to_json_dict()` produces the `runs.config_json` payload and reduces the
+eBird key to a presence flag. Relative `species_model` / `bird_model` / `detector_weights` resolve
+against the **current working directory** and every message prints the resolved absolute path
+(finding 11a); a missing `species_model` prints the exact copy-pasteable `animal-classifier train …`
+invocation (finding 11b). `Config.resolve` creates **no** directories, so a fatal config error can
+never leave a destination tree behind — the property E22 asserts.
+
+Invariant I2 is structural here: `KNOWN_TOML_KEYS` is exactly the §3 key set, so `min_box_area` in a
+TOML file is a fatal unknown key, and its error message says so explicitly.
+
+Verified with real output (`uv run --frozen python` driving `Config.resolve` over 25 cases):
+
+```
+defaults: copy 1.6 0.45 (jpeg, png, tiff, heic) cpu 7 8765 1280 536870912
+catalog: /tmp/tmp_mdksfl8/pics/.catalog.db
+eligible ext: ['.heic', '.heif', '.jpeg', '.jpg', '.png', '.tif', '.tiff']
+toml layer: 2.5 3 link        env over toml: 3.0        cli over env: 1.9
+exit3 missing --config: --config file does not exist: /tmp/tmp_mdksfl8/nope.toml
+exit3 unknown TOML key (min_box_area): unknown key(s) in …/bad.toml: min_box_area. Valid keys are:
+      bird_model, …, output_root, species_model. Note there is deliberately no box-area floor
+      setting; dominance_ratio is the only size gate.
+exit3 dominance_ratio=0.5: must be >= 1.0, got 0.5 (a ratio below 1.0 would make the smaller box
+      dominant)
+exit3 --formats raw: formats (--formats) contains 'raw', which is not one of {jpeg, png, tiff, heic}.
+      RAW is not a format family: enable it with --raw …
+exit3 device cuda: --device cuda was requested but no CUDA device is available on this host. Omit the
+      flag to auto-select, or pass --device cpu.
+exit3 output inside source / source inside output / identical  (all three directions)
+exit3 hosted_bird_api: … would require ANIMAL_CLASSIFIER_HOSTED_BIRD_API_URL and
+      ANIMAL_CLASSIFIER_HOSTED_BIRD_API_KEY …
+exit3 ebird no key: requires a non-empty ANIMAL_CLASSIFIER_EBIRD_API_KEY …   OK with key: ebird_enrich
+exit3 image_size 700 (not /64) / crop_margin 0.9 / detector_iou 0 / SOURCE missing / SOURCE nonexistent
+exit3 missing species_model: … not found at /projects/…/models/species.acmodel. Produce it with:
+        animal-classifier train --manifest data/manifests/coco_species.jsonl --out /projects/…
+exit3 missing detector weights: … Download MegaDetector v5a from https://github.com/…/md_v5a.0.0.pt
+output_root created? False
+```
+
+Also verified: `uv run --frozen python -c "import animal_classifier.config, animal_classifier.errors"`
+→ `imports clean`; `uv run --frozen pytest tests/e2e -q` → `no tests ran in 0.00s` (0 failures, as the
+chunk-2 gate requires — the first tests land in chunk 9); and
+`rg -n 'min_box_area|min_box_area_frac|min_animal_area|box_area_floor' src/ tests/ pyproject.toml`
+matches nothing but the docstring in `config.py` that states the absence as an invariant.
+
+### One deliberate, reasoned deviation from DESIGN.md (not a silent one)
+
+§8 says `--formats` should be a `list[Format]` typer option, "so an invalid family is a typer usage
+error" — which would exit **2**. But §11's E22 row and IMPL-PLAN chunk 13 both require `--formats raw`
+to exit **3** with the offending value in stderr. Two independent test expectations outrank the
+implementation hint, so `--formats` is taken as `list[str]` by typer and validated in `config.py`,
+raising `ConfigError` (exit 3) with the valid family set and a pointer to `--raw`. Recorded here so
+the reviewer sees a decision, not an accident.
+
+### Also worth flagging
+
+`detector_max_det` is a real config key (default 100, int in [1, 10000]) even though §3's TOML block
+does not list it: IMPL-PLAN chunk 14 requires the detector to read `config.detector_max_det` rather
+than hard-code §5.4's inline `max_det=100`. It is therefore in `DEFAULTS` and hence in
+`KNOWN_TOML_KEYS`.
+
+### Blocked
+
+Nothing. Next up is chunk 3 (`catalog.py`: the seven tables, four indexes, WAL, the schema-version
+guard, the `skipped`/`sources` upserts that fix DEFECT 1, the re-inference transaction, and the full
+re-processing policy).

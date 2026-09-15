@@ -318,3 +318,26 @@ document.
   hits blocked hosts.
 - `yolov5` pins `typer` down to 0.25.1 — keep the CLI compatible or pin deliberately.
 - Unpickling MegaDetector requires `sys.modules['models']`/`['utils']` aliased to `yolov5.*`.
+
+## Re-verified 2026-09-15 21:51 UTC (chunk 1, after locking the dependency contract)
+
+`pyproject.toml` was rewritten to DESIGN.md §2.1, `uv.lock` regenerated (`uv lock`), and the venv
+synced with `uv sync --frozen --extra dev`. **No pin moved**: `torch==2.14.0`, `torchvision==0.29.0`,
+`timm==1.0.29`, `numpy==2.5.3`, `yolov5==7.0.14`, `opencv-python-headless==5.0.0.93`,
+`typer==0.27.2`, `pillow==12.3.0`, `pillow-heif==1.7.0`, `setuptools==80.10.2`, `pytest==9.1.1`,
+and `opencv-python` / `roboflow` / `sahi` are all absent from the installed environment
+(`importlib.metadata.PackageNotFoundError`).
+
+All three probes were re-run against that synced venv and reproduce the original measurements
+exactly:
+
+- `probe_md_checkpoint.py` → `model.names = ['animal', 'person', 'vehicle']`, 140,054,656 params,
+  `model.stride = tensor([ 8., 16., 32., 64.])`, checkpoint 280766885 bytes.
+- `probe_md_inference.py` → forward OK in 0.92 s on CPU, raw prediction shape `(1, 25500, 8)`.
+- `probe_backbones.py` → `efficientnet_b0` params=5,288,548 missing=0 unexpected=0 logits=(1, 1000);
+  `convnext_nano` params=15,593,560 missing=0 unexpected=0 logits=(1, 1000).
+
+One measurement differs harmlessly from §2.1's "109 packages": `uv.lock` records **113** package
+names, because a lockfile includes the root project plus the `raw` and `dev` extras (`rawpy`,
+`pytest`, `iniconfig`, `pluggy`), whereas the 109 came from `uv pip compile` of the runtime set only.
+No runtime pin changed, so the verification above still stands.

@@ -1,8 +1,8 @@
 {
   "complete": false,
   "total_items": 26,
-  "done_items": 0,
-  "current_chunk": "1. Dependency contract and the three probes on the locked env",
+  "done_items": 2,
+  "current_chunk": "3. catalog.py: schema, indexes, upserts, statuses — including reproduced DEFECT 1",
   "plan_file": "docs/IMPL-PLAN.md",
   "spec_of_record": "docs/DESIGN.md",
   "branch": "feat/safari-classifier",
