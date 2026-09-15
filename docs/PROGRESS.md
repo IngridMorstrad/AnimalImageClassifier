@@ -779,3 +779,19 @@ than hard-code §5.4's inline `max_det=100`. It is therefore in `DEFAULTS` and h
 Nothing. Next up is chunk 3 (`catalog.py`: the seven tables, four indexes, WAL, the schema-version
 guard, the `skipped`/`sources` upserts that fix DEFECT 1, the re-inference transaction, and the full
 re-processing policy).
+
+## 2026-09-15 21:54 UTC — test runner — ran the e2e suite: 0 collected, 0 failures
+Command: `uv run pytest tests/e2e -v` (plus `--collect-only` to confirm). Real output captured
+verbatim in `docs/test-report.md`.
+
+Counts: **passed 0 / failed 0 / errored 0 / skipped 0 — collected 0.** The suite is empty:
+`tests/e2e/` holds only `conftest.py`, which defines no fixtures yet. Nothing passed, nothing
+broke — there is simply nothing to run. This matches `impl-status.json` (2 of 26 chunks done,
+current chunk 3) and the note that the first e2e tests land in chunk 9.
+
+Two things for whoever reads this next:
+- pytest exits **5** on an empty suite, so a gate that keys off a non-zero exit code will flag
+  this run as a failure even though no test failed. Resolves itself once chunk 9 lands.
+- E2E-only spec is respected: zero `.py` files under `tests/` outside `tests/e2e/`.
+
+No source or test file was edited in this step. `uv sync` was not needed. Blocked: nothing.
