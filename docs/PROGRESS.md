@@ -1293,3 +1293,56 @@ runs as **root** (chmod does not stop root) — it was proved through the dangli
 instead, and chunk 12's E16 will cover the rest. `scan.py` still has **no e2e coverage**: no entry
 point reaches it until `classify` is wired in chunk 9 (same shape as F7/F12). Next: chunk 6,
 `images.py`.
+
+## 2026-09-15 22:53 UTC — e2e suite re-run at chunk 5 (`4fdc624`): 7 passed, 0 failed, exit 0
+
+Test-running step only. **No source or test file was edited** — the only writes were
+`docs/test-report.md`, this entry, and the commit.
+
+### Command actually run
+
+```
+cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v
+```
+
+`uv sync` was not needed; the venv resolved and ran as-is. Re-run once more as `-q` to confirm the
+result is reproducible.
+
+### Real counts
+
+| Result | Count |
+|---|---|
+| passed | **7** |
+| failed | 0 |
+| errored | 0 |
+| skipped | 0 |
+| collected | 7 |
+
+Process exit code **0**. Wall time 0.97s on both runs. Same 7 tests, same result as the
+`6e448c2` run at 22:37 UTC — `scan.py` landing in chunk 5 did not change the suite, because nothing
+in `tests/e2e/` reaches it yet.
+
+All 7 come from `tests/e2e/test_cli_surface.py` and assert on `--help` output only:
+`test_top_level_help_lists_every_command` (all six commands named, exit 0) and
+`test_no_command_offers_an_area_floor[classify|gui|train|eval|export-trainset|verify]` (none of 10
+area-floor spellings present). Mechanism is real e2e — `conftest.py` resolves the installed
+`animal-classifier` console script from `PATH` and runs it as a subprocess. This is the standing
+executable guard on invariant I2 (`dominance_ratio` is the only size gate).
+
+Because there were **zero failures**, there is no failing test name, assertion message, or
+responsible source file to record. Verbatim output is in `docs/test-report.md` §2.
+
+### Spec compliance
+
+`find tests/ -type f ! -path '*/e2e/*'` printed **nothing** — no unit-test file exists outside
+`tests/e2e/`, so no spec violation to report. `pyproject.toml` still pins
+`testpaths = ["tests/e2e"]`. Nothing was deleted.
+
+### Blocked / not done
+
+Nothing blocked — the suite runs, collects, and passes reproducibly. Standing coverage fact, not a
+new problem: of the eight modules under `src/animal_classifier/`, only `cli.py`'s `--help` output is
+exercised. `scan.py`, `catalog.py` and `taxonomy/labels.py` have **no e2e coverage in this run**;
+they are evidenced so far only by the ad-hoc verification scripts logged above. Per the plan that
+closes in chunk 9 (E6 full form, first executable path through `scan.py`), chunk 12 (E16, every skip
+reason) and chunk 18 (E8). Next: chunk 6, `images.py`.
