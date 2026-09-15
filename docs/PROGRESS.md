@@ -1003,3 +1003,144 @@ the caller side, where the `skipped` upsert cannot protect it. No caller exists 
 Next: chunk 4, `taxonomy/` — `slug()`, `LABEL_RE`, `RESERVED_LABELS` and the static name tables
 (DEFECT 2's normalization layer, the thing that keeps `022_chuck_will_widow` from ever becoming an
 output directory name).
+
+---
+
+## 2026-09-15 22:35 UTC — chunk 4: `taxonomy/`, and DEFECT 2's normalization layer
+
+Reviewer verdict at the top of this iteration was `CHANGES_REQUESTED` with exactly one blocking
+finding, **B1: "implementation is 3 of 26 chunks complete"**. B1 is a sequencing finding, not a defect
+in the diff — the review says in as many words that nothing in `catalog.py`, `errors.py`, `config.py`,
+`pyproject.toml` or `tests/e2e/` needs to be undone. So the fix for B1 is to keep building: chunk 4.
+
+### What landed
+
+`src/animal_classifier/taxonomy/` — the label space and the static offline name tables:
+
+- **`labels.py`** (~430 lines). `LABEL_RE = ^[a-z0-9][a-z0-9_-]{0,63}$`,
+  `RESERVED_LABELS = {multiple, landscape, junk, unknown}`, and `slug()` **verbatim** from DESIGN.md
+  §5.8 (NFKD → ASCII fold → lowercase → collapse `[^a-z0-9]+` → strip → truncate 64 → raise
+  `ConfigError`). Plus `Rank`, the frozen `Taxon` value object, `TaxonTable`, the validating
+  `load_table()`, cached `coco_animals()` / `cub200()` / `merged()`, `validate_label()`,
+  `is_aves_class()` (the §5.6 bird trigger's comparison, named once) and `cub_key_from_dirname()`.
+- **`data/coco_animals.csv`** — the 10 COCO animal classes, hand-authored with explicit `rank`.
+  `bird` is `class`-rank with an empty `scientific`, exactly as DESIGN.md §7.1's artifact example
+  shows; `zebra` is `Equus quagga`/`species`, also from that example. `bear` is `family`/`Ursidae`
+  because COCO's `bear` spans brown/black/polar and no representative binomial is defensible.
+- **`data/cub200.csv`** — all 200 CUB classes, `class=Aves`, 199 with a scientific name.
+
+### DEFECT 2 — how it is now structurally impossible
+
+The defect was raw dataset class names leaking into output paths
+(`~/animal_pics/022_chuck_will_widow/`). Two concepts are now permanently separate:
+
+| | source | example | may name a directory? |
+|---|---|---|---|
+| `key` | `cub_key_from_dirname()` strips the `^\d{3}\.` ordinal | `chuck_will_widow` | **never** |
+| `label` | `slug(common)` from the authoritative CSV | `chuck_wills_widow` | yes, and only this |
+
+Three things make it hold rather than merely be documented:
+
+1. `TaxonTable.label_for()` is the only sanctioned way to name a directory, and it reads `Taxon.label`,
+   which is computed and validated **at load** (DESIGN.md §7.1 / I10) — not at directory-creation time.
+2. `load_table()` rejects a leading digit in a `key` *or* a `label` as a leaked raw dataset id. Note
+   `LABEL_RE` deliberately permits a leading digit (a user may type one in the GUI, and §5.8 freezes
+   that regex), so this extra strictness is applied to **our own tables only** and does not change
+   `LABEL_RE` or the GUI validator that E18/E21 assert.
+3. Two display names that slugify onto one directory is a fatal load error — otherwise two species
+   would silently merge into one folder and no later stage could detect it.
+
+**Apostrophes are authored U+2019 on purpose.** `slug()`'s `encode("ascii", "ignore")` drops U+2019, so
+`Chuck-will’s-widow` → `chuck_wills_widow` and `Brewer’s Blackbird` → `brewers_blackbird` — precisely
+the clean folder names the review asked for. An ASCII `'` survives NFKD and collapses to `_`, giving
+`brewer_s_widow`-style names; that is still correct behaviour for a label a **user types** (E21), it is
+just not how we author our own tables. Both spellings are exercised in the verification below.
+
+`141.Artic_Tern` is the other half of the same idea: CUB misspells it, so the key keeps the dataset's
+spelling (`artic_tern`, which is what the data is keyed by) while the folder is `arctic_tern`.
+
+### A real bug found and fixed on the way
+
+`.gitignore` line 14 was an **unanchored** `data/`, intended for the downloaded datasets. It also
+matched `src/animal_classifier/taxonomy/data/`, so both new CSVs were invisible to `git add -A` **and**
+absent from the wheel (hatchling honours VCS ignore files when selecting files). Caught by building a
+wheel and listing it — the first build contained only the two `.py` files. Fixed twice over: the
+pattern is now `/data/`, and `[tool.hatch.build.targets.wheel] artifacts` names the CSVs explicitly so
+a future ignore rule cannot silently drop data the package cannot run without.
+
+### Verified with real output
+
+**1. Keys match the real archive exactly and in order** — `classes.txt` extracted from the real
+`data/raw/CUB_200_2011.tgz` (1.1 GB), every dirname fed through `cub_key_from_dirname()`:
+
+```
+raw dirs: 200 table rows: 200
+keys match archive exactly & in order: True
+  022.Chuck_will_Widow    -> key=chuck_will_widow  label=chuck_wills_widow  sci=Antrostomus carolinensis
+  009.Brewer_Blackbird    -> key=brewer_blackbird  label=brewers_blackbird  sci=Euphagus cyanocephalus
+  124.Le_Conte_Sparrow    -> key=le_conte_sparrow  label=le_contes_sparrow  sci=Ammodramus leconteii
+  141.Artic_Tern          -> key=artic_tern        label=arctic_tern        sci=Sterna paradisaea
+coco labels: ('bird','cat','dog','horse','sheep','cattle','elephant','bear','zebra','giraffe')
+coco aves keys: ['bird'] | bird rolls up to Aves: True | zebra: False
+merged classes: 210 | all labels match ^[a-z][a-z0-9_]*$: True | no digit-prefixed label: True
+find_by_scientific('equus quagga') -> Taxon(key='zebra', ..., rank=Rank.SPECIES, label='zebra')
+```
+
+**2. Every validation path fails loudly (13 cases, all `ConfigError` exit 3)** — bad header, unknown
+rank, reserved key, reserved-via-display-name, duplicate key, label collision, empty `common`, empty
+`class`, wrong field count, header-only file, missing file, **digit-prefixed key**, **digit-prefixed
+label**. Sample messages:
+
+```
+OK  label collision   -> display name 'grey-heron' slugifies to 'grey_heron', which key 'a_key' already claims
+OK  digit-prefixed key-> key '022_chuck_will_widow' starts with a digit, which means a raw dataset class id
+                         (e.g. '022.Chuck_will_Widow') reached the table instead of a normalised name
+OK  unknown rank      -> rank 'subspecies' for key 'zebra' is not one of species, genus, family, order, class
+```
+
+`slug()` raises on `''`, `'!!!'`, `'---'`, `'😀'`; `validate_label()` rejects all four reserved labels;
+`cub_key_from_dirname()` raises on `Chuck_will_Widow`, `22.Chuck_will_Widow`, `022.`, `images`, `''`;
+`label_for('no_such_bird')` raises instead of returning a placeholder (I7).
+
+**3. Slug behaviour, both apostrophe forms:**
+
+```
+slug('Brewer’s Blackbird')  = 'brewers_blackbird'      slug("Brewer's Blackbird") = 'brewer_s_blackbird'
+slug('Chuck-will’s-widow')  = 'chuck_wills_widow'      slug('  Grey  Heron  ')    = 'grey_heron'
+slug('Équus quagga')        = 'equus_quagga'
+```
+
+**4. The CSVs actually ship** (`uv build --wheel`, second build):
+
+```
+   443 animal_classifier/taxonomy/data/coco_animals.csv
+ 13289 animal_classifier/taxonomy/data/cub200.csv
+```
+
+**5. `uv run --frozen pytest tests/e2e -v` → 7 passed, exit 0** (unchanged; chunk 4 adds no CLI
+surface, so it adds no e2e leg — see below).
+
+**6. Invariant I2 still clean.** `rg -n -i -e min_box_area -e min_area -e area_floor -e
+min_animal_area -e min_box_frac src/ tests/` matches only the denylist in
+`tests/e2e/test_cli_surface.py` and the prose in `config.py:14`.
+
+### Honest scope — what is NOT proven yet
+
+Chunk 4 adds no command and creates no directory, so there is no end-to-end leg it could honestly
+add: everything above is a real captured run of the shipped code, but through `python -c`, not through
+`animal-classifier`. **The e2e assertion that no digit-prefixed or otherwise raw class name becomes a
+directory lands in chunk 18 (E8)**, which is where the plan and the reviewer both put it and the first
+point at which the pipeline creates a label directory at all. Until then DEFECT 2's fix is proven by
+the load-time rejections above, not by an observed output tree.
+
+`white_necked_raven` is the one CUB class shipped with an empty `scientific`: "White-necked Raven" is
+ambiguous between *Corvus albicollis* and the former name of the Chihuahuan Raven, and CUB mixes
+North-American and non-North-American species, so it cannot be resolved offline. Empty is the honest
+answer there (DESIGN.md §13.3), not a guess.
+
+### Blocked
+
+Nothing. Next is chunk 5 (`scan.py`), which must **first** act on `FOLLOWUPS.md` F1: `ensure_image`
+refreshes `status`/`run_id` and defaults to `planned`, so an unconditional call from the new scanner
+would reset `done` rows to `planned` and defeat the clean-no-op invariant from the caller side, where
+the `skipped` upsert cannot protect it.

@@ -10,8 +10,12 @@ models/*.pth
 models/*.onnx
 models/backbones/
 
-# Downloaded datasets — never committed
-data/
+# Downloaded datasets — never committed.
+# Anchored with a leading slash on purpose: an unanchored `data/` also matched
+# src/animal_classifier/taxonomy/data/, which silently dropped the shipped
+# taxonomy CSVs from both `git add -A` and the wheel (hatchling honours VCS
+# ignore files when selecting files).
+/data/
 
 # Catalog / databases
 *.sqlite

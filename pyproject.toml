@@ -54,6 +54,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/animal_classifier"]
+# The static taxonomy tables are data the package cannot run without (no species API
+# is reachable, DESIGN.md §13.3), so they are named explicitly rather than left to
+# hatchling's default file selection, which honours .gitignore and had silently
+# dropped them.
+artifacts = ["src/animal_classifier/taxonomy/data/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/e2e"]

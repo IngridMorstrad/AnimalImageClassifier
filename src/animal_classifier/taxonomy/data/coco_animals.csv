@@ -1,0 +1,11 @@
+key,common,scientific,class,rank
+bird,Bird,,Aves,class
+cat,Cat,Felis catus,Mammalia,species
+dog,Dog,Canis familiaris,Mammalia,species
+horse,Horse,Equus caballus,Mammalia,species
+sheep,Sheep,Ovis aries,Mammalia,species
+cow,Cattle,Bos taurus,Mammalia,species
+elephant,Elephant,Loxodonta africana,Mammalia,species
+bear,Bear,Ursidae,Mammalia,family
+zebra,Zebra,Equus quagga,Mammalia,species
+giraffe,Giraffe,Giraffa camelopardalis,Mammalia,species

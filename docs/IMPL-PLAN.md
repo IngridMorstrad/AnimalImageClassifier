@@ -106,7 +106,7 @@ no GUI yet.
       chunk's own gate is `cd /projects/sandbox/AnimalImageClassifier && uv run --frozen pytest
       tests/e2e -q` still green and `rg -n "INSERT INTO skipped" src/` showing only the upsert form.
 
-- [ ] 4. **`taxonomy/`: `slug()`, `LABEL_RE`, `RESERVED_LABELS` and the static name tables — DEFECT 2's
+- [x] 4. **`taxonomy/`: `slug()`, `LABEL_RE`, `RESERVED_LABELS` and the static name tables — DEFECT 2's
       normalization layer.** `labels.py` publishes `LABEL_RE = ^[a-z0-9][a-z0-9_-]{0,63}$`,
       `RESERVED_LABELS = {multiple, landscape, junk, unknown}` and `slug()` exactly as §5.8 (NFKD →
       ASCII fold → lowercase → collapse `[^a-z0-9]+` → strip → truncate 64 → **raise `ConfigError`**;
