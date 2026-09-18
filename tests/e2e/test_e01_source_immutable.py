@@ -81,9 +81,23 @@ def test_a_read_only_card_still_classifies(run_cli, fixture_card, tmp_path):
             os.chmod(directory, 0o755)
 
 
-@pytest.mark.xfail(reason="re-tag lands in chunk 21", strict=False)
 def test_retag_never_writes_the_source(run_cli, fixture_card, tmp_path):
-    raise NotImplementedError("GUI re-tag (chunk 21)")
+    """Re-tag is a pure output-tree rename; the card is never opened (§5.8)."""
+    import sys as _sys  # noqa: PLC0415
+
+    _sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+    from conftest_gui import make_client  # noqa: PLC0415
+
+    output = tmp_path / "pics"
+    _classify(run_cli, fixture_card, output)
+    before = _snapshot(fixture_card)
+
+    client = make_client(output, allow_new_labels=True)
+    items = client.get("/api/images").json()["items"]
+    target = next((i for i in items if i["label"] == "unknown"), items[0])
+    client.post(f"/api/images/{target['sha256']}/label", json={"label": "lion"})
+
+    assert _snapshot(fixture_card) == before, "re-tag must not touch the source card"
 
 
 @pytest.mark.xfail(reason="export-trainset lands in chunk 23", strict=False)

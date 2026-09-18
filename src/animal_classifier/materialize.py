@@ -495,3 +495,47 @@ class _suppressed_unlink:
             log.debug("could not remove temp %s: %s", self._path, exc)
             return True
         return False
+
+
+
+def retag(
+    old_dest: Path,
+    *,
+    new_label: str,
+    sha256: str,
+    output_root: Path,
+    mode: Mode,
+) -> Path:
+    """Move an already-filed image to a new label, without opening the source (§5.8).
+
+    A pure output-tree rename: ``os.replace`` moves the directory entry (a regular
+    file, a hardlink keeping its inode, or a symlink moved *as a symlink*), so it
+    works even when the card is unplugged and a ``--link`` destination dangles. The
+    source is never opened — the correction of iteration 2's error where re-tag was
+    defined in terms of the three materialize modes that all read the card.
+
+    The GUI records the ``overrides`` row and the intent *before* calling this
+    (I4); this performs the one rename, resolving a collision at the new
+    destination by §5.8's rules. Returns the new path.
+    """
+    old = require_under_output_root(old_dest, output_root)
+    if not _entry_exists(old):
+        raise MaterializeError(
+            f"cannot re-tag {sha256[:12]}: its filed path {old} is gone"
+        )
+    _ensure_label_dir(output_root / new_label)
+    dest = plan_destination(old, new_label, output_root=output_root)
+
+    absolute_source = old if old.is_symlink() else old.resolve()
+    final, settled = resolve_destination(
+        dest, sha256=sha256, mode=mode, absolute_source=absolute_source
+    )
+    if settled is Outcome.ALREADY_PRESENT:
+        # Already filed correctly at the target; drop the old entry (§5.8 re-tag).
+        if final != old:
+            with _suppressed_unlink(old):
+                old.unlink()
+        return final
+    os.replace(old, final)
+    log.debug("re-tagged %s -> %s", old, final)
+    return final

@@ -52,6 +52,7 @@ from .catalog import (
     CandidateWrite,
     Catalog,
     Disposition,
+    LabelSource,
     RunState,
     Status,
     plan_disposition,
@@ -428,9 +429,23 @@ def _process_image(
         blur_threshold=config.blur_threshold,
     )
 
+    # §5.9: `--reclassify` keeps `label_source='human'` labels unless
+    # `--ignore-overrides`. The model's inference (boxes, candidates, scores) is
+    # still recorded — only the *filed label* is held to the human's correction, so
+    # a re-run does not silently move a photo the user deliberately re-tagged. The
+    # override is never deleted (I6); `--ignore-overrides` merely suppresses it for
+    # this run and demotes the row to `model`.
+    label_source = LabelSource.MODEL
+    human = _human_override(catalog, prepared.sha256, config)
+    if human is not None:
+        label = human
+        label_source = LabelSource.HUMAN
+    else:
+        label = decision.label
+
     filed = materialize(
         prepared.candidate.path,
-        label=decision.label,
+        label=label,
         sha256=prepared.sha256,
         output_root=config.output_root,
         mode=config.mode,
@@ -449,17 +464,37 @@ def _process_image(
         candidates=candidates,
         decision=decision,
         filed=filed,
+        label=label,
+        label_source=label_source,
         model_id=model_id,
         dry_run=config.dry_run,
     )
     counters.n_done += 1
     log.info(
-        "%s -> %s/%s (%s)",
+        "%s -> %s/%s (%s%s)",
         prepared.candidate.path.name,
-        decision.label,
+        label,
         filed.dest_path.name,
         filed.outcome,
+        ", human" if label_source is LabelSource.HUMAN else "",
     )
+
+
+def _human_override(catalog: Catalog, sha256: str, config: Config) -> str | None:
+    """The newest human label to keep for this hash, or ``None`` (§5.9).
+
+    Returns ``None`` when overrides are ignored for this run (``--ignore-overrides``)
+    or the row was never human-labelled, so the fresh model decision stands.
+    """
+    if config.ignore_overrides:
+        return None
+    row = catalog.image(sha256)
+    if row is None or row.label_source != str(LabelSource.HUMAN):
+        return None
+    override = catalog.newest_override(sha256)
+    if override is None:
+        return None
+    return override["new_label"]
 
 
 def _score(
@@ -517,6 +552,8 @@ def _write_result(
     candidates: dict[int, list[Any]],
     decision: Decision,
     filed: Materialized,
+    label: str,
+    label_source: LabelSource,
     model_id: str,
     dry_run: bool,
 ) -> None:
@@ -562,7 +599,7 @@ def _write_result(
             )
             for idx, entry in enumerate(scored)
         ],
-        label=decision.label,
+        label=label,
         confidence=decision.confidence,
         species_common=decision.species_common,
         species_scientific=decision.species_scientific,
@@ -573,6 +610,10 @@ def _write_result(
         mode=str(filed.mode),
         run_id=run_id,
     )
+    # replace_inference does not touch label_source (a human label must survive a
+    # model re-run). Set it explicitly so a re-tagged image stays `human` and a
+    # fresh model decision is recorded as `model` (§5.9).
+    catalog.update_image(prepared.sha256, label_source=str(label_source))
 
 
 def _record_preparation_failure(

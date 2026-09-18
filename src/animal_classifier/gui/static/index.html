@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>animal-classifier review</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header>
+    <h1>animal-classifier</h1>
+    <span id="run-info" class="run-info"></span>
+  </header>
+  <div class="layout">
+    <aside id="sidebar">
+      <h2>Labels</h2>
+      <ul id="label-list"></ul>
+    </aside>
+    <main>
+      <div class="filters">
+        <label>min conf <input type="range" id="min-conf" min="0" max="1" step="0.05" value="0" /></label>
+        <span id="min-conf-value">0.00</span>
+        <label><input type="checkbox" id="include-unscored" /> show unscored</label>
+        <input type="search" id="search" placeholder="search label / species" />
+        <span id="unscored-note" class="unscored-note"></span>
+      </div>
+      <div id="grid" class="grid"></div>
+      <div id="detail" class="detail hidden"></div>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

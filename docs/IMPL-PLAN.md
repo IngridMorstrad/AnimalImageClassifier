@@ -448,7 +448,7 @@ no GUI yet.
 
 ## Phase F — the GUI (chunks 20–22)
 
-- [ ] 20. **GUI read paths (`gui/app.py`) — E18 and E17's GUI legs.** `create_app(config)` +
+- [x] 20. **GUI read paths (`gui/app.py`) — E18 and E17's GUI legs.** `create_app(config)` +
       `animal-classifier gui` on `127.0.0.1:8765` (no `--host`). All `GET` routes use read-only
       connections (`file:...?mode=ro`). `/api/labels` is **catalog-authoritative**
       (`SELECT label, COUNT(*) … WHERE status IN ('done','planned','materializing')` — NIT 16 adds
@@ -480,7 +480,7 @@ no GUI yet.
       GUI legs: `/full` **and** `/thumb` return 409 `reason="planned"`, and `/api/labels` shows
       `count > 0` with `files_on_disk == 0`.
 
-- [ ] 21. **GUI re-tag: rename inside the output tree, validation, contention (E19–E21).**
+- [x] 21. **GUI re-tag: rename inside the output tree, validation, contention (E19–E21).**
       `materialize.retag()` exactly as §5.8: resolve the new destination, **write the override row
       and the `materializing` status first** (I4), then one `os.replace`, then `status='done'`; the
       source is never opened. Collisions reuse §5.8's rules (identical content or identical
@@ -511,7 +511,7 @@ no GUI yet.
       new POST leg returns 409 `reason="planned"` with the row still `planned` and no override row;
       **E1's re-tag legs are now unmarked and green**.
 
-- [ ] 22. **GUI frontend (vanilla JS, no build step).** `index.html`, `app.js`, `app.css`: thumbnail
+- [x] 22. **GUI frontend (vanilla JS, no build step).** `index.html`, `app.js`, `app.css`: thumbnail
       grid grouped by label with per-label counts in a sidebar (rendering catalog `count`, with a
       warning marker and a "run verify" hint whenever `files_on_disk != count`), label / confidence /
       date filters with the "N images have no confidence score — show them" and undated toggles wired

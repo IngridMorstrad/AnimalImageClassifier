@@ -284,13 +284,51 @@ def _report(summary: Any) -> None:
 @app.command()
 def gui(
     output: Path = typer.Option(
-        Path("~/animal_pics"), "--output", "-o", help="Labelled output root to browse."
+        None, "--output", "-o", help="Labelled output root to browse [~/animal_pics]."
     ),
     port: int = typer.Option(8765, "--port", help="Port to serve the GUI on."),
+    allow_new_labels: bool = typer.Option(
+        False, "--allow-new-labels", help="Accept labels not yet in the taxonomy/catalog."
+    ),
 ) -> None:
-    """Serve the review GUI for an already-classified output tree."""
-    typer.echo(f"gui: {_NOT_IMPLEMENTED}", err=True)
-    raise typer.Exit(1)
+    """Serve the review GUI for an already-classified output tree (§6)."""
+    code = _gui(output=output, port=port, allow_new_labels=allow_new_labels)
+    raise typer.Exit(code)
+
+
+def _gui(*, output: Path | None, port: int, allow_new_labels: bool) -> int:
+    try:
+        config = Config.resolve(
+            command=Command.GUI,
+            cli={
+                "output_root": str(output) if output else None,
+                "allow_new_labels": allow_new_labels or None,
+            },
+            config_path=_GLOBAL["config_path"],
+        )
+        if not config.catalog_path.is_file():
+            log.error(
+                "no catalog at %s; run `animal-classifier classify SOURCE --output %s` first",
+                config.catalog_path, config.output_root,
+            )
+            from .errors import EXIT_CONFIG  # noqa: PLC0415
+
+            return EXIT_CONFIG
+        import uvicorn  # noqa: PLC0415
+
+        from .gui.app import create_app  # noqa: PLC0415
+
+        gui_app = create_app(config)
+        log.info("serving the review GUI at http://127.0.0.1:%d", port)
+        uvicorn.run(gui_app, host="127.0.0.1", port=port, log_level="warning")
+    except AnimalClassifierError as error:
+        log.error("%s", error)
+        return error.exit_code
+    except Exception as error:
+        log.error("gui failed: %s: %s", type(error).__name__, error,
+                  exc_info=log.isEnabledFor(logging.DEBUG))
+        return EXIT_UNEXPECTED
+    return 0
 
 
 @app.command()

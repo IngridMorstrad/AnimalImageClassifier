@@ -58,7 +58,10 @@ packages = ["src/animal_classifier"]
 # is reachable, DESIGN.md §13.3), so they are named explicitly rather than left to
 # hatchling's default file selection, which honours .gitignore and had silently
 # dropped them.
-artifacts = ["src/animal_classifier/taxonomy/data/*.csv"]
+artifacts = [
+    "src/animal_classifier/taxonomy/data/*.csv",
+    "src/animal_classifier/gui/static/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/e2e"]
