@@ -237,7 +237,7 @@ no GUI yet.
       tests/e2e/test_e13_idempotency_limit_reclassify.py -q` — all legs pass, and paste the captured
       output showing the second run's exit code and its `already_present` count.
 
-- [ ] 11. **Source immutability, the three modes, duplicates and collisions.** E1 snapshots
+- [x] 11. **Source immutability, the three modes, duplicates and collisions.** E1 snapshots
       `(relative path, size, mtime_ns, sha256)` over the whole fixture card and asserts byte-identical
       equality after `classify`, a re-tag, `export-trainset` and `verify --fix` — run in **copy** and
       **`--hardlink`** legs (hardlink proves I1 under an aliased inode: source `mtime_ns`/`sha256`

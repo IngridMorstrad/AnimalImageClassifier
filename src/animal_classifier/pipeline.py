@@ -255,6 +255,13 @@ def _accept(
     was done in the pool.
     """
     budget = config.limit
+    # Hashes already accepted for processing *in this run*. Content — not path — is
+    # the identity (§5.9), so the same photo copied twice on the card is classified
+    # once and filed once; the duplicate's source path is still recorded. Without
+    # this, the second copy's row is merely `planned` (the first has not finished),
+    # so it escapes the SKIP_DONE gate and would be filed a second time under its
+    # own name — two destination files for one image (E14).
+    seen_this_run: set[str] = set()
     for entry, digest, error in _bounded_map(
         pool, _hash_entry, scan(config), window=window
     ):
@@ -284,6 +291,15 @@ def _accept(
         # must go — that is what makes a widened --formats visible (§5.9).
         catalog.forget_skip(entry.path)
 
+        if digest in seen_this_run:
+            # A duplicate of a hash already accepted this run: record the extra
+            # source path (so provenance is complete) and move on. n_total counted
+            # it as a walked file, but it is neither processed nor filed again.
+            catalog.upsert_source(entry.path, digest, entry.mtime_ns)
+            counters.n_already_done += 1
+            log.debug("%s: duplicate of %s already queued this run", entry.path, digest[:12])
+            continue
+
         row = catalog.image(digest)
         if plan_disposition(row, reclassify=config.reclassify) is Disposition.SKIP_DONE:
             # Before the budget is consulted, and without touching the row: bumping
@@ -307,6 +323,7 @@ def _accept(
             bytes=entry.size,
         )
         catalog.upsert_source(entry.path, digest, entry.mtime_ns)
+        seen_this_run.add(digest)
         yield entry, digest
 
 
