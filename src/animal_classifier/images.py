@@ -416,10 +416,10 @@ def _read_gps(path: Path, exif: Image.Exif) -> tuple[float | None, float | None]
         return None, None
 
     lat = _to_degrees(
-        path, gps.get(_TAG_GPS_LATITUDE), gps.get(_TAG_GPS_LATITUDE_REF), "S"
+        path, gps.get(_TAG_GPS_LATITUDE), gps.get(_TAG_GPS_LATITUDE_REF), "N", "S"
     )
     lon = _to_degrees(
-        path, gps.get(_TAG_GPS_LONGITUDE), gps.get(_TAG_GPS_LONGITUDE_REF), "W"
+        path, gps.get(_TAG_GPS_LONGITUDE), gps.get(_TAG_GPS_LONGITUDE_REF), "E", "W"
     )
     if lat is None or lon is None:
         if lat is not None or lon is not None:
@@ -434,10 +434,38 @@ def _read_gps(path: Path, exif: Image.Exif) -> tuple[float | None, float | None]
 
 
 def _to_degrees(
-    path: Path, value: object, ref: object, negative_ref: str
+    path: Path, value: object, ref: object, positive_ref: str, negative_ref: str
 ) -> float | None:
-    """One EXIF ``(degrees, minutes, seconds)`` rational triple → signed float."""
+    """One EXIF ``(degrees, minutes, seconds)`` rational triple → signed float.
+
+    The hemisphere letter decides the **sign**, so it is validated as strictly as
+    the magnitude: it must decode to ``positive_ref`` or ``negative_ref``, and
+    anything else — absent, empty, numeric, or unrecognised — drops the
+    coordinate with a ``WARNING`` instead of falling through to the positive
+    hemisphere. A defaulted sign is the worst possible EXIF lie for this tool: it
+    puts a Serengeti photo (``S``) north of the equator, which is not a slightly
+    wrong location but a confident wrong one, and it is what would send
+    ``ebird_enrich`` to the wrong continent (§10.2's rule that a plausible-looking
+    value is never invented).
+
+    ``ref`` arrives as ``bytes`` more often than the spec suggests:
+    ``GPSLatitudeRef`` is ASCII(2), but firmware that declares it UNDEFINED(7)
+    makes Pillow yield ``b"S"``. That is why the letter is extracted by
+    :func:`_gps_ref_letter` and not by ``str(ref)`` — ``str(b"S")`` is ``"b'S'"``,
+    which starts with neither hemisphere letter and so read as North.
+    """
     if value is None:
+        return None
+    letter = _gps_ref_letter(ref)
+    if letter not in (positive_ref, negative_ref):
+        log.warning(
+            "%s: GPS ref %r is neither %s nor %s, so the hemisphere is unknown; "
+            "coordinate is NULL",
+            path,
+            ref,
+            positive_ref,
+            negative_ref,
+        )
         return None
     try:
         degrees, minutes, seconds = (float(part) for part in value)  # type: ignore[union-attr]
@@ -445,9 +473,27 @@ def _to_degrees(
         log.warning("%s: GPS value %r is unusable (%s); NULL", path, value, error)
         return None
     decimal = degrees + minutes / 60.0 + seconds / 3600.0
-    if str(ref).strip().upper().startswith(negative_ref):
-        decimal = -decimal
-    return decimal
+    return -decimal if letter == negative_ref else decimal
+
+
+def _gps_ref_letter(ref: object) -> str | None:
+    """The hemisphere letter from an EXIF ref tag, or ``None`` if there isn't one.
+
+    Accepts the ``str`` the spec asks for and the ``bytes`` an UNDEFINED-typed tag
+    produces, strips EXIF's trailing NUL, and returns a single upper-case letter.
+    Returns ``None`` for every other shape so the caller drops the coordinate
+    rather than guessing a hemisphere.
+    """
+    if isinstance(ref, bytes):
+        try:
+            text = ref.decode("ascii")
+        except UnicodeDecodeError:
+            return None
+    elif isinstance(ref, str):
+        text = ref
+    else:
+        return None
+    return text.strip().rstrip("\x00").strip().upper()[:1] or None
 
 
 def measure_blur(image: Image.Image) -> Blur:
@@ -513,24 +559,51 @@ def crop(
 
     A box under :data:`DEGENERATE_MIN_SIDE` px on a side after clipping comes
     back with ``degenerate=True`` and ``image=None``: unclassifiable, but the
-    caller must still count it as an animal for dominance (§5.3, §5.7, E26).
+    caller must still count it as an animal for dominance (§5.3, §5.7, E26). A box
+    that misses the frame entirely is that same degenerate case with a zero-extent
+    region on the frame edge — ``region`` is always ordered, never inverted.
+
+    Raises ``ValueError`` for a non-finite coordinate, which is a detector
+    malfunction rather than a per-image failure; see the comment at the check.
     """
     if not 0.0 <= crop_margin <= 0.5:
         raise ConfigError(
             f"crop_margin must be in [0.0, 0.5], got {crop_margin!r}"
         )
 
+    coordinates = tuple(float(coordinate) for coordinate in box)
+    if not all(np.isfinite(coordinates)):
+        # Deliberately *not* an ImageDecodeError: a NaN or inf coordinate is a
+        # detector malfunction, not one bad photo, and the per-image `except`
+        # would record a single skip while every other frame in the run kept
+        # receiving garbage. Left unchecked it is silent rather than loud — NaN
+        # loses every comparison, so `max`/`min` clipping returns the *frame*
+        # bounds and a NaN box becomes a full-frame crop that is classified as
+        # an animal and contributes a meaningless `area_frac` to the dominance
+        # rule (§5.7), the one decision the whole design turns on.
+        raise ValueError(
+            f"detection box {box!r} has a non-finite coordinate; "
+            "boxes must be finite pixel coordinates in the decoded frame"
+        )
+
     width, height = image.size
-    x0, x1 = sorted((float(box[0]), float(box[2])))
-    y0, y1 = sorted((float(box[1]), float(box[3])))
+    x0, x1 = sorted((coordinates[0], coordinates[2]))
+    y0, y1 = sorted((coordinates[1], coordinates[3]))
     margin_x = (x1 - x0) * crop_margin
     margin_y = (y1 - y0) * crop_margin
 
-    # Expand, then clip, in floats — this is the extent §5.3 measures.
-    left_f = max(0.0, x0 - margin_x)
-    top_f = max(0.0, y0 - margin_y)
-    right_f = min(float(width), x1 + margin_x)
-    bottom_f = min(float(height), y1 + margin_y)
+    # Expand, then clip, in floats — this is the extent §5.3 measures. Each edge
+    # is clamped into the frame interval rather than bounded on one side only:
+    # clamping is monotonic, so `left_f <= right_f` survives a box that lies
+    # entirely outside the frame. Bounding one side each (`max(0, ...)` for the
+    # near edge, `min(width, ...)` for the far one) inverted the region in that
+    # case — a box at x=600 on a 500 px frame yielded x0=592, x1=500 — and that
+    # negative-extent region was still returned and persisted to `boxes`, where
+    # the GUI would try to draw it.
+    left_f = _clamp(x0 - margin_x, 0.0, float(width))
+    right_f = _clamp(x1 + margin_x, 0.0, float(width))
+    top_f = _clamp(y0 - margin_y, 0.0, float(height))
+    bottom_f = _clamp(y1 + margin_y, 0.0, float(height))
 
     # Outward rounding (floor the near edges, ceil the far ones) so the margin is
     # never rounded away. The degeneracy test below deliberately uses the *float*
@@ -557,3 +630,12 @@ def crop(
         return Crop(region=region, image=None, degenerate=True)
 
     return Crop(region=region, image=image.crop(region), degenerate=False)
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    """``value`` confined to ``[low, high]``.
+
+    Monotonic, which is the property :func:`crop` relies on: clamping both edges
+    of an interval into the same range cannot reorder them.
+    """
+    return min(max(value, low), high)

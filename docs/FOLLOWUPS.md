@@ -203,3 +203,97 @@ None of F15–F20 withheld approval; the only blocking finding was the progress 
       no caller today. Keep `is_benign()`: its string-accepting form is load-bearing, because it
       classifies a reason read back out of the catalog and raises `ValueError` on an unrecognised
       value rather than defaulting to benign.
+
+
+## From an unscheduled review of chunk 6 (`images.py`, 2026-09-18)
+
+Raised against `940115b` by reading the module and probing it with inputs
+`scripts/probe_images.py` did not build. **F21 and F22 are real defects, not polish, and both
+are fixed in this commit** — each one silently corrupted a value that feeds the dominance
+rule or the catalog, which is why neither could be left to a later chunk. F23–F26 are
+observations only.
+
+- [x] **F21 — a GPS hemisphere ref spelled as `bytes` flipped the coordinate into the wrong
+      hemisphere** (high). `_to_degrees` decided the sign with
+      `str(ref).strip().upper().startswith(negative_ref)`. `GPSLatitudeRef` is ASCII(2) per
+      the EXIF spec, but firmware that declares it UNDEFINED(7) makes Pillow's `Image.Exif`
+      yield `b"S"` — and `str(b"S")` is `"b'S'"`, which starts with neither `N` nor `S`, so a
+      southern-hemisphere photo was stored at **+1.5° instead of −1.5°**. Verified before the
+      fix: `_to_degrees(path, (1, 30, 0), b"S", "S")` returned `1.5`, and
+      `TiffImagePlugin.ImageFileDirectory_v2` with `tagtype[1] = 7` confirms Pillow really
+      does hand back `b"S"` for that tag. The same fall-through also defaulted an **absent,
+      empty or numeric** ref to the positive hemisphere. That is the lie §10.2 forbids, in the
+      one field where it is most damaging: a hemisphere flip is not an imprecise location but
+      a confident wrong one, it is what `ebird_enrich` uses to down-rank species by locality
+      (PLAN.md "Birds"), and for a tool aimed at African safaris the wrong side of the equator
+      is the common case, not the exotic one.
+      **Fixed**: the letter is now extracted by `_gps_ref_letter`, which accepts `str` and
+      `bytes`, strips EXIF's trailing NUL, and returns `None` for anything else; `_to_degrees`
+      takes the positive letter as well as the negative one and drops the coordinate with a
+      `WARNING` unless the ref decodes to one of the two. The sign is now validated as
+      strictly as the magnitude. Nine ref shapes are pinned in `probe_images.py`.
+
+- [x] **F22 — a non-finite box coordinate became a silent full-frame crop; an off-frame box
+      produced an inverted region** (high). Two separate defects in `crop`, both found by
+      passing boxes a malfunctioning detector could emit:
+      - NaN loses every comparison, so `max(0.0, nan)` returned `0.0` and `min(500.0, nan)`
+        returned `500.0`. A box of `(nan, 0, 10, 10)` on a 500×500 frame therefore clipped to
+        `region=(0, 0, 500, 11)` with `degenerate=False` — a full-width strip, handed to the
+        classifier as an animal, contributing a meaningless `area_frac` to the §5.7 dominance
+        rule. Fully silent: no warning, no skip row. `config.py:497` already rejects NaN and
+        inf for every float knob, so the project's standard for detector output was simply
+        lower than its standard for config. Now raises `ValueError`, deliberately *not* an
+        `ImageDecodeError` — a NaN box is a systemic detector fault, and routing it through
+        the per-image `except` would record one skip while the rest of the card kept taking
+        garbage.
+      - Bounding each edge on one side only (`max(0, …)` near, `min(width, …)` far) inverted
+        the region for a box that misses the frame entirely: `(600, 600, 700, 700)` on a
+        500 px frame gave `region=(592, 592, 500, 500)`, extent −92×−92. It was correctly
+        degenerate, so no pixels were cropped, but the region is still returned and
+        `boxes.x0..y1` still persists it, and the GUI overlay would be asked to draw a
+        negative-extent rectangle. Both edges are now clamped into the frame interval with
+        `_clamp`; clamping is monotonic, so `left_f <= right_f` holds for every input and the
+        off-frame case collapses to a zero-extent region on the frame edge.
+
+- [ ] **F23 — there is no automated lint or type gate, and three `noqa` directives are
+      already dead** (medium — decide before the tree doubles in size). Neither `ruff` nor
+      `mypy` is in `[dependency-groups] dev`, there is no `[tool.ruff]` config and no
+      `.github/` CI, yet the source carries `# noqa: PLC0415` (`images.py:294`),
+      `# noqa: S603` (`tests/e2e/conftest.py:38`) and `# noqa: E402`
+      (`scripts/probe_md_inference.py:17`) — rules that are not enabled, so `ruff check`
+      reports all three as `RUF100` unused directives. The intent to lint is in the code; the
+      gate is not. A `ruff check --select E,F,I,B,SIM,PL,S,RUF,DTZ,PYI,EXE,UP,C4,RET,ARG` run
+      finds 85 items today, mostly `E501` (37) and `B008` (8, all typer's
+      `Argument`/`Option`-in-default idiom, which wants the `Annotated` spelling or a
+      per-file ignore). Worth picking a ruleset deliberately, pinning it in `pyproject.toml`,
+      and adding it to the gate command — a 26-chunk build reviewed by reading diffs is
+      exactly the shape of project where a mechanical check pays for itself. Two genuine
+      items in that list: `DTZ007` (`images.py`'s `strptime` is naive — correct for EXIF,
+      which has no zone, but say so) and `PLR0124` (`config.py:497`'s `value != value` NaN
+      idiom, which reads as a typo and is clearer as `math.isnan`).
+
+- [ ] **F24 — `_decode_raw` allocates the full raster before the pixel cap is applied,
+      contradicting the module docstring** (low). `decode`'s docstring promises
+      `too_large_pixels` is "judged from the header, so a decompression bomb is refused
+      without ever being allocated", which holds for the Pillow path (`_refuse_oversized` runs
+      on `opened.size` before `convert`). On the RAW path `_refuse_oversized` runs on
+      `array.shape` *after* `source.postprocess()` has already decoded and allocated. Bounded
+      in practice by `max_file_bytes` and by `--raw` being opt-in, so this is an accuracy
+      problem in the docstring more than a live risk — `rawpy` exposes `sizes` before
+      postprocessing if the guarantee is worth making real.
+
+- [ ] **F25 — a multi-frame file silently becomes its first frame** (low, undocumented).
+      An animated GIF and a multi-page TIFF both decode to frame 0 with no warning. That is
+      almost certainly the behaviour you want for a photo pipeline, and the exotic-mode
+      handling around it is genuinely solid (palette+transparency, 16-bit grayscale, CMYK and
+      LA all convert to RGB without complaint, verified). Recorded only because "which frame
+      is the frame" is a question §5.2 does not answer, and a burst-mode TIFF stack would
+      quietly lose frames 1..n.
+
+- [ ] **F26 — every source file is read twice, once to hash and once to decode** (low, perf).
+      `sha256_file` and `decode` each open the file through `open_source`, so a 500 MB RAW
+      within `max_file_bytes` is pulled off the SD card twice. Inherent to hashing raw bytes
+      rather than pixels (§5.2, and the right call — the hash must be decoder-independent),
+      but the two passes could share one read when the decode worker lands in chunk 9/10.
+      Mentioned because SD card throughput, not inference, will dominate a real card's
+      wall-clock time.

@@ -1474,3 +1474,62 @@ message. Recorded rather than papered over.
 **Next:** chunk 7 — `detect/base.py` (the `Detector` protocol and the frozen `Box` dataclass in the
 transposed frame) plus `detect/scripted.py` (the shipped `--detector scripted` sidecar reader that
 makes dominance geometry exactly stateable for E5/E6/E26).
+
+
+## 2026-09-18 — unscheduled review of chunk 6 (`images.py`): 2 real defects found and fixed
+
+Not a gate review and not a plan chunk: a read of `940115b` plus a probe of `images.py` with inputs
+the chunk-6 probe did not build (bytes-typed EXIF refs, non-finite and off-frame boxes, exotic colour
+modes, multi-frame files, non-image bytes). The module held up well — every exotic mode
+(palette+transparency, 16-bit grayscale, CMYK, LA) converts to RGB cleanly, and empty/text/HTML
+bytes all land on `decode_error` — but two inputs produced **silently wrong values** rather than
+errors, and both fed something load-bearing. Fixed here rather than deferred, because each one
+corrupts data that later chunks will read back out of the catalog as ground truth.
+
+**Defect 1 (F21) — `bytes` GPS ref flipped the hemisphere.** `_to_degrees` took the sign from
+`str(ref).startswith(negative_ref)`. `GPSLatitudeRef` is ASCII(2) per spec, but firmware declaring it
+UNDEFINED(7) makes Pillow yield `b"S"`, and `str(b"S")` is `"b'S'"` — so the negative branch never
+fired and a southern-hemisphere photo was recorded at **+1.5° instead of −1.5°**. Verified before the
+fix (`_to_degrees(p, (1, 30, 0), b"S", "S")` → `1.5`) and that Pillow really produces that shape
+(`ImageFileDirectory_v2` with `tagtype[1] = 7` → `b"S"` on read-back). An absent, empty or numeric
+ref defaulted to the positive hemisphere the same way. Worst field in the schema for a defaulted
+value: `ebird_enrich` down-ranks species by locality, and for African safari photos the southern
+hemisphere is the normal case. Now `_gps_ref_letter` accepts `str` and `bytes`, strips EXIF's NUL,
+and yields `None` otherwise; the coordinate is dropped with a `WARNING` unless the letter decodes to
+the axis's positive or negative letter. The sign is validated as strictly as the magnitude.
+
+**Defect 2 (F22) — a NaN box became a full-frame crop, and an off-frame box an inverted region.**
+NaN loses every comparison, so `max(0.0, nan)` → `0.0` and `min(500.0, nan)` → `500.0`: a box of
+`(nan, 0, 10, 10)` on a 500×500 frame clipped to `region=(0, 0, 500, 11)` with `degenerate=False`, a
+full-width strip classified as an animal and contributing a meaningless `area_frac` to the §5.7
+dominance rule — with no warning and no skip row. `config.py:497` already rejects NaN/inf for every
+float knob, so the bar for detector output was simply lower than the bar for config; `crop` now
+raises `ValueError`, deliberately not an `ImageDecodeError`, since a NaN box is a systemic detector
+fault and the per-image `except` would log one skip while the rest of the card kept taking garbage.
+Separately, bounding each edge on one side only inverted the region for a box that misses the frame
+entirely — `(600, 600, 700, 700)` on a 500 px frame gave `region=(592, 592, 500, 500)`, extent
+−92×−92, correctly degenerate but still persisted to `boxes.x0..y1` for the GUI to draw. Both edges
+are now clamped into the frame interval by `_clamp`; clamping is monotonic, so `left_f <= right_f`
+holds for every input and the off-frame case collapses to a zero-extent region on the frame edge.
+
+**Verified.**
+
+1. `uv run --frozen python scripts/probe_images.py` → **all probe checks passed**, exit 0, with two
+   new sections holding 18 added checks: nine GPS ref shapes (`"S"`, `"S\x00"`, `"N"`, `b"S"`, `b"N"`
+   → ±1.5 correctly; absent / empty / numeric / `"X"` → NULL), three non-finite boxes → `ValueError`,
+   and the off-frame box now `(500, 500, 500, 500)` — ordered, on the frame edge, degenerate — while
+   a box straddling the edge is still clipped to `(0, 0, 48, 48)` and stays classifiable. Every
+   pre-existing check in that probe still passes unchanged, including `S 1°30' → -1.5`.
+2. `uv run --frozen pytest tests/e2e -q` → **7 passed, exit 0**, unchanged. No test added (E11/E18
+   still own `images.py`'s executable coverage; the suite stays e2e-only) and none deleted or weakened.
+
+**Also recorded, not acted on:** F23 — there is no lint or type gate at all (`ruff`/`mypy` absent
+from `[dependency-groups] dev`, no `[tool.ruff]` config, no CI) even though the source already
+carries `# noqa: PLC0415`, `# noqa: S603` and `# noqa: E402` for rules nothing enables, so `ruff`
+flags all three as dead `RUF100` directives. F24 — the RAW path allocates before the pixel cap,
+contradicting `decode`'s docstring. F25 — multi-frame files silently become frame 0. F26 — every
+file is read twice, once to hash and once to decode.
+
+**Next:** unchanged — chunk 7 (`detect/base.py` + `detect/scripted.py`). F22's `ValueError` is the
+contract `detect/base.py`'s `Box` should state explicitly: finite pixel coordinates in the
+transposed frame.

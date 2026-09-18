@@ -29,6 +29,7 @@ from animal_classifier.images import (
     MAX_IMAGE_PIXELS,
     Blur,
     ImageDecodeError,
+    _to_degrees,
     crop,
     decode,
     measure_blur,
@@ -230,6 +231,73 @@ def main() -> int:
             check("crop_margin 0.9 raises", False)
         except ConfigError as error:
             check("crop_margin out of range -> ConfigError", True, str(error))
+
+        print("\n== the hemisphere letter decides the sign, so it is validated ==")
+        # Exercised at `_to_degrees` rather than through `decode`: Pillow re-encodes
+        # GPS refs as ASCII on save, so a file written here can never carry the
+        # bytes spelling that firmware emits for an UNDEFINED(7)-typed tag. The
+        # bytes *do* reach us on read — `Image.Exif` yields b"S" for that tag — and
+        # `str(b"S")` is "b'S'", which starts with neither N nor S.
+        triple = (1.0, 30.0, 0.0)
+        for ref, expected, label in [
+            ("S", -1.5, "ASCII 'S'"),
+            ("S\x00", -1.5, "EXIF's NUL-padded 'S'"),
+            ("N", 1.5, "ASCII 'N'"),
+            (b"S", -1.5, "bytes b'S' (UNDEFINED-typed tag)"),
+            (b"N", 1.5, "bytes b'N'"),
+            (None, None, "absent ref"),
+            ("", None, "empty ref"),
+            (0, None, "numeric ref"),
+            ("X", None, "unrecognised letter"),
+        ]:
+            got = _to_degrees(Path("probe.jpg"), triple, ref, "N", "S")
+            check(
+                f"{label} -> {expected}",
+                got == expected,
+                f"got {got}",
+            )
+        check(
+            "no ref shape silently defaults to the positive hemisphere",
+            _to_degrees(Path("probe.jpg"), triple, None, "N", "S") is None,
+        )
+
+        print("\n== a box the detector should never send: non-finite, or off-frame ==")
+        frame_500 = Image.new("RGB", (500, 500), "black")
+        for bad in [
+            (float("nan"), 0.0, 10.0, 10.0),
+            (0.0, 0.0, float("inf"), 10.0),
+            (float("-inf"), 0.0, 10.0, 10.0),
+        ]:
+            try:
+                piece = crop(frame_500, bad, crop_margin=0.08)
+                check(
+                    f"non-finite box {bad} rejected",
+                    False,
+                    f"silently became region {piece.region} "
+                    f"degenerate={piece.degenerate}",
+                )
+            except ValueError as error:
+                check(f"non-finite box {bad} -> ValueError", True, str(error)[:60])
+
+        off = crop(frame_500, (600.0, 600.0, 700.0, 700.0), crop_margin=0.08)
+        x0, y0, x1, y1 = off.region
+        check("box entirely off-frame is degenerate", off.degenerate)
+        check(
+            "off-frame region is ordered, not inverted",
+            x0 <= x1 and y0 <= y1,
+            f"region {off.region}",
+        )
+        check(
+            "off-frame region sits on the frame edge",
+            0 <= x0 <= 500 and 0 <= y0 <= 500,
+            f"region {off.region}",
+        )
+        partly = crop(frame_500, (-50.0, -50.0, 40.0, 40.0), crop_margin=0.08)
+        check(
+            "a box straddling the frame edge is clipped, not rejected",
+            not partly.degenerate and partly.region[0] == 0,
+            f"region {partly.region}",
+        )
 
         print("\n== the source card is untouched ==")
         sources = sorted(p for p in card.iterdir() if p.is_file())
