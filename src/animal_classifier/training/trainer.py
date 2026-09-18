@@ -18,7 +18,6 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import torch
 from torch import nn

@@ -45,7 +45,7 @@ from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Final, TypeVar
+from typing import Any, Final, TypeVar
 
 from .catalog import (
     BoxWrite,
@@ -57,7 +57,7 @@ from .catalog import (
     plan_disposition,
 )
 from .config import Config, DetectorKind
-from .decide import Decision, ScoredBox, SpeciesPrediction, decide
+from .decide import Decision, ScoredBox, decide
 from .detect import Box, Detector, ScriptedDetector
 from .errors import AssetError
 from .images import (

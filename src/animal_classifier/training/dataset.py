@@ -13,9 +13,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 
-import numpy as np
 import torch
-from PIL import Image
 from torch.utils.data import Dataset, WeightedRandomSampler
 from torchvision import transforms
 
