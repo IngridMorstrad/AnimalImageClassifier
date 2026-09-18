@@ -159,7 +159,13 @@ DETECTOR_WEIGHTS_URL: Final = (
 #: single edit restores §10.1's row, and E22 (fail-loud config) is where the
 #: restored behaviour must be asserted. Deliberately a named constant rather than a
 #: commented-out block so the gap is greppable and has exactly one switch.
-SPECIES_INFERENCE_WIRED: Final = False
+#:
+#: Flipped to ``True`` when ``classify/own_model.py`` landed (chunk 17): a
+#: configured, present ``species_model`` is loaded and run per animal crop, and
+#: §10.1's required-artifact rows are in force again. A run pointing at no model
+#: still works (pass-through → ``unknown``), so the pipeline tolerates an absent
+#: artifact gracefully rather than refusing a useful landscape/junk triage run.
+SPECIES_INFERENCE_WIRED: Final = True
 
 
 def config_search_paths() -> tuple[Path, ...]:
@@ -219,6 +225,7 @@ class Config:
     force_bird_head: bool
     allow_new_labels: bool
     config_path: Path | None
+    species_model_explicit: bool = False
     ebird_api_key: str | None = field(repr=False, default=None)
 
     @property
@@ -340,6 +347,7 @@ class Config:
             force_bird_head=_flag(layers, "force_bird_head"),
             allow_new_labels=_flag(layers, "allow_new_labels"),
             config_path=toml_origin,
+            species_model_explicit=layers.find("species_model") is not None,
             ebird_api_key=_ebird_api_key(bird_provider, env),
         )
 
@@ -794,14 +802,18 @@ def _validate_required_assets(config: Config) -> None:
                     f"Download MegaDetector v5a from {DETECTOR_WEIGHTS_URL}",
                 )
             )
-        if SPECIES_INFERENCE_WIRED:
+        # Species model policy (F27, refined at chunk 17). A trained species model
+        # is optional: with none present, `classify` runs the pass-through path
+        # (every animal → `unknown`) and still does useful landscape/junk triage and
+        # real detection. But if the user *explicitly* names a `--species-model`
+        # that does not exist, that is a mistake we must not swallow — they asked for
+        # a specific model, so its absence is fatal (I7). A present model at the
+        # default path is loaded and used; an absent default path is the pass-through
+        # path, not an error.
+        if SPECIES_INFERENCE_WIRED and config.species_model_explicit:
             required.append(
                 ("species_model", config.species_model, TRAIN_HINT_SPECIES.format(path=config.species_model))
             )
-            if not config.force_bird_head or config.bird_provider is BirdProvider.OWN_BIRD_HEAD:
-                required.append(
-                    ("bird_model", config.bird_model, TRAIN_HINT_BIRDS.format(path=config.bird_model))
-                )
     for key, path, remedy in required:
         if not path.exists():
             raise AssetError(f"{key} not found at {path}. Produce it with:\n  {remedy}")

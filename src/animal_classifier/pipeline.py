@@ -49,6 +49,7 @@ from typing import Final, TypeVar
 
 from .catalog import (
     BoxWrite,
+    CandidateWrite,
     Catalog,
     Disposition,
     RunState,
@@ -56,7 +57,7 @@ from .catalog import (
     plan_disposition,
 )
 from .config import Config, DetectorKind
-from .decide import Decision, ScoredBox, decide
+from .decide import Decision, ScoredBox, SpeciesPrediction, decide
 from .detect import Box, Detector, ScriptedDetector
 from .errors import AssetError
 from .images import (
@@ -156,6 +157,32 @@ def build_detector(config: Config) -> Detector:
     )
 
 
+def build_classifier(config: Config) -> Any:
+    """The species classifier, or ``None`` when no model is available (§5.5, F27).
+
+    Loading is opt-in on the artifact existing: with no ``species_model`` present
+    the pipeline runs the pass-through path (every animal → ``unknown``) rather than
+    refusing, which is what lets ``classify`` do useful landscape/junk triage before
+    a model has been trained. Once ``SPECIES_INFERENCE_WIRED`` is true and a model is
+    configured, a *missing* artifact is fatal (§10.1) — the config layer enforces
+    that, so by the time we get here the path either exists or species inference is
+    switched off.
+    """
+    from .config import SPECIES_INFERENCE_WIRED  # noqa: PLC0415
+
+    if not SPECIES_INFERENCE_WIRED:
+        return None
+    if not config.species_model.exists():
+        # config validation only requires the artifact when SPECIES_INFERENCE_WIRED
+        # is on; if it is on and the file is absent, that was already fatal. This
+        # guard keeps the pass-through path available for a run that pointed at no
+        # model on purpose.
+        return None
+    from .classify.own_model import SpeciesClassifier  # noqa: PLC0415
+
+    return SpeciesClassifier.from_path(config.species_model)
+
+
 def classify_run(config: Config, *, argv: Sequence[str]) -> RunSummary:
     """Run the whole ``classify`` pipeline once. Returns the summary and exit code.
 
@@ -166,6 +193,7 @@ def classify_run(config: Config, *, argv: Sequence[str]) -> RunSummary:
         raise AssetError("classify requires a SOURCE directory")
 
     detector = build_detector(config)
+    classifier = build_classifier(config)
     config.output_root.mkdir(parents=True, exist_ok=True)
     if not config.dry_run:
         sweep_stale_temps(config.output_root)
@@ -186,7 +214,7 @@ def classify_run(config: Config, *, argv: Sequence[str]) -> RunSummary:
             ", dry-run" if config.dry_run else "",
         )
         try:
-            _process_card(config, catalog, run.run_id, detector, counters)
+            _process_card(config, catalog, run.run_id, detector, classifier, counters)
         except BaseException:
             catalog.finish_run(
                 run.run_id,
@@ -226,6 +254,7 @@ def _process_card(
     catalog: Catalog,
     run_id: str,
     detector: Detector,
+    classifier: Any,
     counters: Counters,
 ) -> None:
     """Walk, prepare and process every eligible image on the card."""
@@ -240,7 +269,7 @@ def _process_card(
                 _record_preparation_failure(catalog, run_id, counters, item, error)
                 continue
             assert prepared is not None
-            _process_image(config, catalog, run_id, detector, counters, prepared)
+            _process_image(config, catalog, run_id, detector, classifier, counters, prepared)
             if counters.n_done % PROGRESS_EVERY == 0:
                 _publish_progress(catalog, run_id, counters)
     _publish_progress(catalog, run_id, counters)
@@ -361,14 +390,17 @@ def _process_image(
     catalog: Catalog,
     run_id: str,
     detector: Detector,
+    classifier: Any,
     counters: Counters,
     prepared: Prepared,
 ) -> None:
-    """Detect, decide, file and record one image, on the calling thread."""
+    """Detect, classify, decide, file and record one image, on the calling thread."""
     decoded = prepared.decoded
     try:
         boxes = tuple(detector.detect(decoded))
-        scored = _score(boxes, decoded, crop_margin=config.crop_margin)
+        scored, candidates = _score(
+            boxes, decoded, crop_margin=config.crop_margin, classifier=classifier
+        )
     except ImageDecodeError as error:
         _record_preparation_failure(
             catalog, run_id, counters, (prepared.candidate, prepared.sha256), error
@@ -406,14 +438,18 @@ def _process_image(
     )
     counters.count_outcome(filed.outcome)
 
+    model_id = detector.model_id
+    if classifier is not None:
+        model_id = f"{detector.model_id}+{classifier.model_id}"
     _write_result(
         catalog,
         run_id,
         prepared,
         scored=scored,
+        candidates=candidates,
         decision=decision,
         filed=filed,
-        detector=detector,
+        model_id=model_id,
         dry_run=config.dry_run,
     )
     counters.n_done += 1
@@ -427,25 +463,49 @@ def _process_image(
 
 
 def _score(
-    boxes: Sequence[Box], decoded: DecodedImage, *, crop_margin: float
-) -> tuple[ScoredBox, ...]:
-    """Pair each box with its crop verdict (§5.3).
+    boxes: Sequence[Box],
+    decoded: DecodedImage,
+    *,
+    crop_margin: float,
+    classifier: Any,
+) -> tuple[tuple[ScoredBox, ...], dict[int, list[Any]]]:
+    """Crop each box, classify the non-degenerate animal crops (§5.3, §5.5).
 
-    The crop's *pixels* are unused until a species model exists, but whether the
-    crop is degenerate is decided by geometry alone and is what E26 turns on, so
-    the crop is taken now. A degenerate box keeps its place in the sequence: it
-    still counts as an animal for dominance, and dropping it would be an area floor
-    by the back door.
+    Whether a crop is degenerate is geometry alone and is what E26 turns on, so the
+    crop is always taken. A degenerate box keeps its place — it still counts as an
+    animal for dominance, and dropping it would be an area floor by the back door.
+
+    When ``classifier`` is ``None`` (no species model) every animal reaches §5.7
+    with ``species=None`` and becomes ``unknown``. When present, the classifiable
+    animal crops are batched through it in one forward pass, and the per-box top-5
+    ``candidates`` are returned keyed by box index for the ``candidates`` table.
     """
     scored: list[ScoredBox] = []
-    for box in boxes:
+    classifiable: list[tuple[int, Any]] = []  # (box index, crop image)
+    for index, box in enumerate(boxes):
         status: str | None = None
+        crop_image = None
         if box.is_animal:
             piece = crop(decoded.image, box.xyxy, crop_margin=crop_margin)
             if piece.degenerate:
                 status = SPECIES_STATUS_DEGENERATE
+            else:
+                crop_image = piece.image
         scored.append(ScoredBox(box=box, species=None, species_status=status))
-    return tuple(scored)
+        if crop_image is not None:
+            classifiable.append((index, crop_image))
+
+    candidates: dict[int, list[Any]] = {}
+    if classifier is not None and classifiable:
+        predictions = classifier.classify([image for _, image in classifiable])
+        for (index, _), (prediction, box_candidates) in zip(classifiable, predictions):
+            scored[index] = ScoredBox(
+                box=scored[index].box,
+                species=prediction,
+                species_status=None,
+            )
+            candidates[index] = box_candidates
+    return tuple(scored), candidates
 
 
 def _write_result(
@@ -454,9 +514,10 @@ def _write_result(
     prepared: Prepared,
     *,
     scored: Sequence[ScoredBox],
+    candidates: dict[int, list[Any]],
     decision: Decision,
     filed: Materialized,
-    detector: Detector,
+    model_id: str,
     dry_run: bool,
 ) -> None:
     """One transaction per image (§5.9): boxes, candidates and the images row."""
@@ -484,7 +545,20 @@ def _write_result(
                 y1=entry.box.y1,
                 area_frac=entry.area_frac,
                 is_dominant=entry is decision.dominant,
+                species_common=None if entry.species is None else entry.species.common,
+                species_scientific=None if entry.species is None else entry.species.scientific,
+                species_conf=entry.species_conf,
+                species_rank=None if entry.species is None else entry.species.rank,
                 species_status=entry.species_status,
+                candidates=tuple(
+                    CandidateWrite(
+                        rank=c.rank,
+                        common=c.common,
+                        scientific=c.scientific,
+                        score=c.score,
+                    )
+                    for c in candidates.get(idx, [])
+                ),
             )
             for idx, entry in enumerate(scored)
         ],
@@ -493,7 +567,7 @@ def _write_result(
         species_common=decision.species_common,
         species_scientific=decision.species_scientific,
         species_rank=decision.species_rank,
-        model_id=detector.model_id,
+        model_id=model_id,
         status=Status.PLANNED if dry_run else Status.DONE,
         dest_path=str(filed.dest_path),
         mode=str(filed.mode),

@@ -295,21 +295,129 @@ def gui(
 
 @app.command()
 def train(
-    manifest: Path = typer.Argument(..., help="Training dataset manifest."),
+    manifest: Path = typer.Option(None, "--manifest", help="Training dataset manifest (JSONL)."),
+    out: Path = typer.Option(..., "--out", help="Where to write the .acmodel artifact."),
+    arch: str = typer.Option("efficientnet_b0", "--arch", help="Backbone architecture (or tinycnn)."),
+    dataset: str = typer.Option("manifest", "--dataset", help="manifest | synthetic."),
+    classes: str = typer.Option(None, "--classes", help="Comma-separated subset of labels."),
+    epochs_head: int = typer.Option(3, "--epochs-head", help="Head-only epochs."),
+    epochs_finetune: int = typer.Option(5, "--epochs-finetune", help="Finetune epochs."),
+    batch_size: int = typer.Option(32, "--batch-size", help="Batch size."),
+    input_size: int = typer.Option(224, "--input-size", help="Input resolution."),
+    unfreeze_blocks: int = typer.Option(2, "--unfreeze-blocks", help="Top blocks to unfreeze."),
+    backbone_weights: Path = typer.Option(None, "--backbone-weights", help="Local backbone weights."),
+    resume: bool = typer.Option(False, "--resume", help="Resume from <out>.ckpt."),
+    jobs: int = typer.Option(7, "--jobs", help="torch thread count."),
+    seed: int = typer.Option(0, "--seed", help="RNG seed."),
+    device: str = typer.Option("auto", "--device", help="auto | cpu | cuda."),
 ) -> None:
     """Train or finetune the species classifier."""
-    typer.echo(f"train: {_NOT_IMPLEMENTED}", err=True)
-    raise typer.Exit(1)
+    code = _train(
+        manifest=manifest, out=out, arch=arch, dataset=dataset, input_size=input_size,
+        epochs_head=epochs_head, epochs_finetune=epochs_finetune, batch_size=batch_size,
+        unfreeze_blocks=unfreeze_blocks, backbone_weights=backbone_weights, resume=resume,
+        jobs=jobs, seed=seed, device=device,
+    )
+    raise typer.Exit(code)
+
+
+def _train(**kwargs: Any) -> int:
+    from .training.run import run_train  # noqa: PLC0415
+
+    try:
+        run_train(**kwargs)
+    except AnimalClassifierError as error:
+        log.error("%s", error)
+        return error.exit_code
+    except Exception as error:
+        log.error("train failed: %s: %s", type(error).__name__, error,
+                  exc_info=log.isEnabledFor(logging.DEBUG))
+        return EXIT_UNEXPECTED
+    return 0
 
 
 @app.command()
 def eval(
-    manifest: Path = typer.Argument(..., help="Evaluation dataset manifest."),
+    manifest: Path = typer.Option(..., "--manifest", help="Evaluation dataset manifest."),
     model: Path = typer.Option(..., "--model", help="Exported model artifact to evaluate."),
+    split: str = typer.Option("val", "--split", help="train | val."),
+    calibrate: bool = typer.Option(False, "--calibrate", help="Fit a temperature."),
+    out: Path = typer.Option(None, "--out", help="New artifact for --calibrate."),
+    device: str = typer.Option("auto", "--device", help="auto | cpu | cuda."),
 ) -> None:
-    """Evaluate an exported model artifact."""
-    typer.echo(f"eval: {_NOT_IMPLEMENTED}", err=True)
-    raise typer.Exit(1)
+    """Evaluate an exported model artifact (and optionally calibrate it)."""
+    code = _eval(manifest=manifest, model=model, split=split, calibrate=calibrate,
+                 out=out, device=device)
+    raise typer.Exit(code)
+
+
+def _eval(*, manifest: Path, model: Path, split: str, calibrate: bool,
+          out: Path | None, device: str) -> int:
+    from .classify.artifact import load as load_artifact  # noqa: PLC0415
+    from .errors import ConfigError  # noqa: PLC0415
+    from .training import evaluate as ev  # noqa: PLC0415
+    from .training.manifest import load_manifest  # noqa: PLC0415
+    from .training.run import resolve_device  # noqa: PLC0415
+
+    try:
+        if calibrate and out is None:
+            raise ConfigError("eval --calibrate requires --out; artifacts are immutable")
+        if out is not None and out.exists():
+            raise ConfigError(
+                f"--out {out} already exists; calibration writes a NEW artifact, "
+                "never edits one (its model_id would then be ambiguous)"
+            )
+        resolved = resolve_device(device)
+        artifact = load_artifact(model)
+        samples = load_manifest(manifest, split=split)
+        metrics = ev.evaluate(artifact, samples, device=resolved)
+        log.info(
+            "eval %s on %d %s samples: top1=%.3f top5=%.3f macro_recall=%.3f",
+            artifact.model_id, metrics.support, split, metrics.top1, metrics.top5,
+            metrics.macro_recall,
+        )
+        typer.echo(
+            f"top1={metrics.top1:.4f} top5={metrics.top5:.4f} "
+            f"macro_recall={metrics.macro_recall:.4f} support={metrics.support}"
+        )
+        if calibrate:
+            _calibrate_to_new_artifact(artifact, samples, model, out, resolved, ev)
+    except AnimalClassifierError as error:
+        log.error("%s", error)
+        return error.exit_code
+    except Exception as error:
+        log.error("eval failed: %s: %s", type(error).__name__, error,
+                  exc_info=log.isEnabledFor(logging.DEBUG))
+        return EXIT_UNEXPECTED
+    return 0
+
+
+def _calibrate_to_new_artifact(artifact, samples, model_path, out, device, ev) -> None:
+    """Fit a temperature and write a NEW artifact with a derived model_id (§7.4)."""
+    import torch  # noqa: PLC0415
+
+    from .classify.artifact import save as save_artifact  # noqa: PLC0415
+
+    temperature = ev.fit_temperature(artifact, samples, device=device)
+    blob = torch.load(model_path, map_location="cpu", weights_only=False)
+    existing_cal = artifact.model_id.count("+cal")
+    new_id = f"{artifact.model_id}+cal{existing_cal + 1}"
+    train_meta = dict(blob.get("train", {}))
+    train_meta["calibrated_from"] = artifact.model_id
+    save_artifact(
+        out,
+        model_id=new_id,
+        arch=artifact.arch,
+        input_size=artifact.input_size,
+        mean=list(artifact.mean),
+        std=list(artifact.std),
+        labels=blob["labels"],
+        state_dict=blob["state_dict"],
+        temperature=temperature,
+        train_meta=train_meta,
+    )
+    log.info("calibrated: T=%.4f -> %s (%s)", temperature, out, new_id)
+    typer.echo(f"calibrated temperature={temperature:.4f} -> {out}")
 
 
 @app.command("export-trainset")

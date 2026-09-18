@@ -321,7 +321,7 @@ no GUI yet.
 
 ## Phase D — training and the species head (chunks 15–17)
 
-- [ ] 15. **Training subsystem skeleton + the fast synthetic smoke path (E10).**
+- [x] 15. **Training subsystem skeleton + the fast synthetic smoke path (E10).**
       `training/manifest.py` (JSONL read/write/validate, **fail on the first bad line** with line
       number and field, missing files fatal, plus `split_for()` keyed on the **basename** exactly as
       §7.2), `training/dataset.py` (`ManifestDataset`, crop-on-load at the artifact's `crop_margin`,
@@ -373,7 +373,7 @@ no GUI yet.
       `--input-size` toward 224 and/or `--epochs-finetune`, recorded in PROGRESS.md — never lower the
       threshold.
 
-- [ ] 17. **Species inference wired into `classify` (E7 identity leg + E12).**
+- [x] 17. **Species inference wired into `classify` (E7 identity leg + E12).**
       `classify/own_model.py` loads the artifact, batches an image's crops (≤ 8), forwards, applies
       `softmax(logits / artifact["temperature"])`, returns `Prediction`/`Candidate` exactly as §5.5
       with `rank_level` from the artifact, and gates on `min_species_confidence` → `unknown` while
