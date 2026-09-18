@@ -23,13 +23,27 @@ from .base import (
 )
 from .scripted import SIDECAR_SUFFIX, ScriptedDetector
 
+# MegaDetector is intentionally *not* imported eagerly: it pulls in torch and
+# yolov5, a multi-second import, and `classify --detector scripted`, the GUI and
+# the tests must not pay that cost. `pipeline.build_detector` imports it lazily
+# only when `--detector megadetector` is actually selected.
 __all__ = [
     "ANIMAL_CLASS",
     "SIDECAR_SUFFIX",
     "Box",
     "BoxClass",
     "Detector",
+    "MegaDetector",
     "ScriptedDetector",
     "animal_boxes",
     "box_from_pixels",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily expose :class:`MegaDetector` without importing torch at package load."""
+    if name == "MegaDetector":
+        from .megadetector import MegaDetector  # noqa: PLC0415
+
+        return MegaDetector
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -140,13 +140,19 @@ def build_detector(config: Config) -> Detector:
     """
     if config.detector is DetectorKind.SCRIPTED:
         return ScriptedDetector(confidence=config.detector_confidence)
-    raise AssetError(
-        f"--detector {config.detector} is not implemented yet: real MegaDetector "
-        "v5a inference lands in a later build step, together with the checkpoint's "
-        "pinned size and sha256. Today only `--detector scripted` can run, which "
-        "reads a <image>.boxes.json sidecar beside each photo (DESIGN.md §5.4). "
-        "Without a real detector every image is filed as landscape or junk, so "
-        "this refuses rather than pretending the card holds no animals."
+    if config.detector is DetectorKind.MEGADETECTOR:
+        from .detect import MegaDetector  # noqa: PLC0415 - heavy torch import path
+
+        return MegaDetector.load(
+            config.detector_weights,
+            confidence=config.detector_confidence,
+            iou=config.detector_iou,
+            image_size=config.detector_image_size,
+            max_det=config.detector_max_det,
+            jobs=config.jobs,
+        )
+    raise AssetError(  # pragma: no cover - DetectorKind is a closed enum
+        f"unknown detector {config.detector!r}"
     )
 
 

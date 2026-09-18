@@ -289,7 +289,7 @@ no GUI yet.
 
 ## Phase C — the real detector (chunk 14)
 
-- [ ] 14. **MegaDetector v5a for real, and E4 against COCO ground truth.** `detect/megadetector.py`:
+- [x] 14. **MegaDetector v5a for real, and E4 against COCO ground truth.** `detect/megadetector.py`:
       the `sys.modules['models'/'utils'] = yolov5.*` alias shim, `torch.load(..., weights_only=False)`
       with a **size + sha256 gate** against `280766885` /
       `94e88fe97c8050f2e3d0cc4cb4f64729d639d74312dcbe2f74f8eecd3b01b276` (fatal with the download URL
