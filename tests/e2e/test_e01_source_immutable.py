@@ -100,11 +100,20 @@ def test_retag_never_writes_the_source(run_cli, fixture_card, tmp_path):
     assert _snapshot(fixture_card) == before, "re-tag must not touch the source card"
 
 
-@pytest.mark.xfail(reason="export-trainset lands in chunk 23", strict=False)
 def test_export_trainset_never_writes_the_source(run_cli, fixture_card, tmp_path):
-    raise NotImplementedError("export-trainset (chunk 23)")
+    """export-trainset reads the catalog, not the card (§7.5, I1)."""
+    output = tmp_path / "pics"
+    _classify(run_cli, fixture_card, output)
+    before = _snapshot(fixture_card)
+    run_cli(["export-trainset", "--output", str(output), "--destination", str(tmp_path / "t.jsonl"),
+             "--include-model-labels", "--min-conf", "0.0"])
+    assert _snapshot(fixture_card) == before
 
 
-@pytest.mark.xfail(reason="verify --fix lands in chunk 24", strict=False)
 def test_verify_fix_never_writes_the_source(run_cli, fixture_card, tmp_path):
-    raise NotImplementedError("verify --fix (chunk 24)")
+    """verify --fix only os.replace/os.unlink inside the output tree (§8, I1)."""
+    output = tmp_path / "pics"
+    _classify(run_cli, fixture_card, output)
+    before = _snapshot(fixture_card)
+    run_cli(["verify", "--output", str(output), "--fix"])
+    assert _snapshot(fixture_card) == before

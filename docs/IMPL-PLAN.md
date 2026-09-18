@@ -532,7 +532,7 @@ no GUI yet.
 
 ## Phase G — the loop closers and polish (chunks 23–26)
 
-- [ ] 23. **`export-trainset` with the explicit label filter (E25).** Walk the catalog for
+- [x] 23. **`export-trainset` with the explicit label filter (E25).** Walk the catalog for
       `label_source='human'` (plus `--include-model-labels --min-conf`), emit the §7.5 manifest with
       the dominant box for species labels (`box` omitted when the image has no boxes), skip
       `multiple` and `unknown` **always**, skip `landscape`/`junk` unless `--include-non-species`
@@ -548,7 +548,7 @@ no GUI yet.
       counted summary; with `--include-non-species` the `junk` image appears as class `junk` without
       a `box` while `multiple` is still absent.
 
-- [ ] 24. **`verify` and `verify --fix` with the specific exit codes (E24).** Implement every check
+- [x] 24. **`verify` and `verify --fix` with the specific exit codes (E24).** Implement every check
       of §8 (detector weights size + sha256 + loadable; artifacts loadable at an accepted
       `format_version`; backbone weights present; catalog openable at a known schema version;
       `output_root` writable; `output_root` not nested with the source root read from the **newest

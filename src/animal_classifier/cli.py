@@ -461,20 +461,93 @@ def _calibrate_to_new_artifact(artifact, samples, model_path, out, device, ev) -
 @app.command("export-trainset")
 def export_trainset(
     output: Path = typer.Option(
-        Path("~/animal_pics"), "--output", "-o", help="Labelled output root to export from."
+        None, "--output", "-o", help="Labelled output root to export from [~/animal_pics]."
     ),
     destination: Path = typer.Option(..., "--destination", help="Where to write the manifest."),
+    include_model_labels: bool = typer.Option(
+        False, "--include-model-labels", help="Also export high-confidence model labels."
+    ),
+    min_conf: float = typer.Option(
+        0.7, "--min-conf", help="Confidence floor for --include-model-labels."
+    ),
+    include_non_species: bool = typer.Option(
+        False, "--include-non-species", help="Also emit landscape/junk scene classes."
+    ),
 ) -> None:
-    """Export labelled crops from a classified tree as a training manifest."""
-    typer.echo(f"export-trainset: {_NOT_IMPLEMENTED}", err=True)
-    raise typer.Exit(1)
+    """Export labelled crops from a classified tree as a training manifest (§7.5)."""
+    code = _export_trainset(
+        output=output, destination=destination,
+        include_model_labels=include_model_labels, min_conf=min_conf,
+        include_non_species=include_non_species,
+    )
+    raise typer.Exit(code)
+
+
+def _export_trainset(**kwargs: Any) -> int:
+    from .export_trainset import run_export  # noqa: PLC0415
+
+    try:
+        config = Config.resolve(
+            command=Command.EXPORT_TRAINSET,
+            cli={"output_root": str(kwargs["output"]) if kwargs["output"] else None},
+            config_path=_GLOBAL["config_path"],
+        )
+        summary = run_export(
+            config,
+            destination=kwargs["destination"],
+            include_model_labels=kwargs["include_model_labels"],
+            min_conf=kwargs["min_conf"],
+            include_non_species=kwargs["include_non_species"],
+        )
+    except AnimalClassifierError as error:
+        log.error("%s", error)
+        return error.exit_code
+    except Exception as error:
+        log.error("export-trainset failed: %s: %s", type(error).__name__, error,
+                  exc_info=log.isEnabledFor(logging.DEBUG))
+        return EXIT_UNEXPECTED
+    typer.echo(summary)
+    return 0
 
 
 @app.command()
-def verify() -> None:
-    """Report which models, providers and network resources are reachable."""
-    typer.echo(f"verify: {_NOT_IMPLEMENTED}", err=True)
-    raise typer.Exit(1)
+def verify(
+    output: Path = typer.Option(
+        None, "--output", "-o", help="Labelled output root to check [~/animal_pics]."
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit the report as JSON."),
+    fix: bool = typer.Option(False, "--fix", help="Reconcile the two repairable states."),
+) -> None:
+    """Check assets, config and catalog/filesystem consistency (§8)."""
+    code = _verify(output=output, json_out=json_out, fix=fix)
+    raise typer.Exit(code)
+
+
+def _verify(*, output: Path | None, json_out: bool, fix: bool) -> int:
+    from .verify import run_verify  # noqa: PLC0415
+
+    try:
+        config = Config.resolve(
+            command=Command.VERIFY,
+            cli={"output_root": str(output) if output else None},
+            config_path=_GLOBAL["config_path"],
+        )
+        report, exit_code = run_verify(config, fix=fix)
+    except AnimalClassifierError as error:
+        log.error("%s", error)
+        return error.exit_code
+    except Exception as error:
+        log.error("verify failed: %s: %s", type(error).__name__, error,
+                  exc_info=log.isEnabledFor(logging.DEBUG))
+        return EXIT_UNEXPECTED
+    if json_out:
+        import json as _json  # noqa: PLC0415
+
+        typer.echo(_json.dumps(report, indent=2))
+    else:
+        for check in report["checks"]:
+            typer.echo(f"  [{check['status']}] {check['name']}: {check['detail']}")
+    return exit_code
 
 
 if __name__ == "__main__":
