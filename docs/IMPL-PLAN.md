@@ -275,7 +275,7 @@ no GUI yet.
       tests/e2e/test_e16_formats_and_skips.py tests/e2e/test_e11_landscape_junk.py
       tests/e2e/test_e17_dry_run.py -q` green (E17's GUI 409 legs arrive in chunk 20).
 
-- [ ] 13. **Fail-loud config end to end (E22).** One test, one case per row: missing detector
+- [x] 13. **Fail-loud config end to end (E22).** One test, one case per row: missing detector
       weights; unknown TOML key; `dominance_ratio=0.5`; `hosted_bird_api` selected;
       `ebird_enrich` without `ANIMAL_CLASSIFIER_EBIRD_API_KEY`; `output` nested inside `source`;
       `--formats raw`; `--device cuda` on this CUDA-less host; `eval --calibrate` without `--out`;
