@@ -395,7 +395,7 @@ no GUI yet.
 
 ## Phase E — birds (chunks 18–19)
 
-- [ ] 18. **The CUB bird head and the bird path (E8) — DEFECT 2's assertion.**
+- [x] 18. **The CUB bird head and the bird path (E8) — DEFECT 2's assertion.**
       `scripts/build_cub_manifest.py` extracts CUB-200-2011, emits one sample per image with the box
       from `bounding_boxes.txt` and the official `train_test_split.txt`, and derives labels through
       chunk 4's normalization: directory `022.Chuck_will_Widow` → `key = chuck_will_widow`, display
@@ -421,7 +421,7 @@ no GUI yet.
       matches `^[a-z][a-z0-9_]*$` with no leading digits** — no `~/animal_pics/022_chuck_will_widow/`
       anywhere under the output root (DEFECT 2's regression gate).
 
-- [ ] 19. **`ebird_enrich`, the alias table, and the hosted stub (E23).**
+- [x] 19. **`ebird_enrich`, the alias table, and the hosted stub (E23).**
       `taxonomy/data/ebird_aliases.csv` (`cub_key,ebird_com_name,ebird_sci_name`, hand-authored,
       deliberately partial) with the §5.6 load-time validation (unknown `cub_key` or both name
       columns empty → exit 3 with the CSV line number). `classify/birds/ebird_enrich.py` implements
