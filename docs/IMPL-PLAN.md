@@ -258,7 +258,7 @@ no GUI yet.
 
 ## Phase B — formats, skips, states and fail-loud (chunks 12–13)
 
-- [ ] 12. **Formats, skips, byte cap, symlink policy, landscape/junk, dry-run.** E16 drives a card
+- [x] 12. **Formats, skips, byte cap, symlink policy, landscape/junk, dry-run.** E16 drives a card
       with JPEG/PNG/TIFF/HEIC, an `.mp4`, a `.cr2`, a 0-byte file, a truncated JPEG, a sparse file
       just over `--max-file-bytes`, a symlink to a JPEG inside the card and one to a JPEG outside
       it, plus a `--formats jpeg` run, a `--follow-source-symlinks` run and a `--formats raw` run
