@@ -4,10 +4,11 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Model weights — never committed
+# Model weights and artifacts — never committed (see docs/ARTIFACTS.md)
 models/*.pt
 models/*.pth
 models/*.onnx
+models/*.acmodel
 models/backbones/
 
 # Downloaded datasets — never committed.

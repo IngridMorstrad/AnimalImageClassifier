@@ -7,28 +7,38 @@ each image, and files each photo under `~/animal_pics/<label>/` by copy (default
 See [docs/PLAN.md](docs/PLAN.md) for the design and [docs/PROGRESS.md](docs/PROGRESS.md) for
 the timestamped build log.
 
-## Status: `classify` runs, but it cannot recognise a species yet
+## Status: complete
 
-9 of the 26 chunks in [docs/IMPL-PLAN.md](docs/IMPL-PLAN.md) are done.
+All 26 build chunks in [docs/IMPL-PLAN.md](docs/IMPL-PLAN.md) are done. Every command is
+real: `classify`, `gui`, `train`, `eval`, `export-trainset`, `verify`.
 
-**`classify` works end to end.** It walks the card read-only, decodes every JPEG/PNG/TIFF/HEIC,
-measures sharpness, applies the dominance rule and files each photo into
-`<output>/<label>/` by copy, `--link` or `--hardlink`, recording everything in a SQLite
-catalog. Re-running is a cheap no-op. `--dry-run` writes nothing.
+The tool ships **no** model weights in git (they are large and reproducible); see
+[docs/ARTIFACTS.md](docs/ARTIFACTS.md) for the exact commands that produce the MegaDetector
+checkpoint and the species/bird heads. With no species model present, `classify` still runs
+usefully: it detects animals, applies the dominance rule, and files each photo — a detected
+animal with no trained head is filed as `unknown` rather than a guessed species.
 
-**Two things are missing, and both are load-bearing:**
+## Quick start
 
-- **No detector runs on real photographs.** `--detector megadetector` exits 3 rather than
-  pretending; only `--detector scripted` works today, and it reads boxes from a
-  `<image>.boxes.json` sidecar. Without it every photo is filed as `landscape` or `junk`,
-  so the tool cannot find animals on your card yet. Real MegaDetector v5a lands at chunk 14.
-- **No species model exists.** Every detected animal is therefore filed as `unknown`, never as
-  `lion` or `plains_zebra`. The dominance rule itself is fully working and tested — a single
-  dominant animal lands in `unknown/`, a crowded frame in `multiple/` — it just has no names to
-  attach. Species labels land at chunk 17.
+```bash
+uv sync                                   # create .venv, install everything
 
-`gui`, `train`, `eval`, `export-trainset` and `verify` are still placeholders that print
-`not implemented yet` and exit 1.
+# 1. Get the detector (280 MB, hash-pinned)
+curl -L -o models/md_v5a.0.0.pt \
+  https://github.com/agentmorris/MegaDetector/releases/download/v5.0/md_v5a.0.0.pt
+
+# 2. Classify a card
+uv run animal-classifier classify /Volumes/SDCARD --output ~/animal_pics --detector megadetector
+
+# 3. Review and correct labels in the browser
+uv run animal-classifier gui --output ~/animal_pics     # http://127.0.0.1:8765
+
+# 4. Turn your corrections into the next training set
+uv run animal-classifier export-trainset --output ~/animal_pics --destination trainset.jsonl
+```
+
+Train your own species head from that manifest with `animal-classifier train`; see
+[docs/ARTIFACTS.md](docs/ARTIFACTS.md).
 
 ## Setup
 
@@ -74,10 +84,15 @@ source .venv/bin/activate        # .venv\Scripts\activate on Windows
 animal-classifier verify
 ```
 
-## Tests
+## Tests and lint
 
-End-to-end only, no unit tests. The canonical command, matching the one the build gate uses:
+End-to-end only, no unit tests. Every test drives a real entry point. The canonical gate:
 
 ```bash
-uv run --frozen pytest tests/e2e -q
+uv run --frozen ruff check              # the lint gate
+uv run --frozen pytest tests/e2e -q     # the e2e suite
 ```
+
+Tests marked `slow` train a model or run the real detector; they skip cleanly when the
+280 MB checkpoint or the network is unavailable. Run only the fast ones with
+`-m "not slow"`.

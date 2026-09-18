@@ -42,8 +42,13 @@ _THUMB_EDGE = 320
 
 def create_app(config: Config) -> Any:
     """Build the FastAPI app over ``config.output_root`` (§6)."""
-    from fastapi import FastAPI, HTTPException  # noqa: PLC0415
-    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response  # noqa: PLC0415
+    from fastapi import FastAPI, HTTPException
+    from fastapi.responses import (
+        FileResponse,
+        HTMLResponse,
+        JSONResponse,
+        Response,
+    )
 
     app = FastAPI(title="animal-classifier review", openapi_url=None)
     output_root = config.output_root
@@ -85,7 +90,7 @@ def create_app(config: Config) -> Any:
         return {"labels": labels}
 
     @app.get("/api/images")
-    def api_images(  # noqa: PLR0913
+    def api_images(
         label: str | None = None,
         min_conf: float | None = None,
         max_conf: float | None = None,
@@ -203,14 +208,14 @@ def create_app(config: Config) -> Any:
 
 
 def _validate_sha(sha256: str) -> None:
-    from fastapi import HTTPException  # noqa: PLC0415
+    from fastapi import HTTPException
 
     if not _SHA256_RE.match(sha256):
         raise HTTPException(422, "sha256 must be 64 hex characters")
 
 
 def _validate_label(label: str, known: set[str], allow_new: bool) -> None:
-    from fastapi import HTTPException  # noqa: PLC0415
+    from fastapi import HTTPException
 
     if not LABEL_RE.fullmatch(label) or label in RESERVED_LABELS:
         raise HTTPException(422, f"label {label!r} is not a legal, non-reserved label")
@@ -289,7 +294,7 @@ def _image_payload(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]
 
 def _thumbnail(sha256: str, source: Path, output_root: Path) -> Path:
     """Generate (and cache) a 320 px JPEG thumbnail from ``dest_path`` (§6)."""
-    from PIL import Image, ImageOps  # noqa: PLC0415
+    from PIL import Image, ImageOps
 
     cache_dir = output_root / ".thumbs" / sha256[:2]
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -305,7 +310,7 @@ def _thumbnail(sha256: str, source: Path, output_root: Path) -> Path:
 
 def _do_retag(config: Config, sha256: str, row: sqlite3.Row, new_label: str, note: Any) -> Path:
     """Record the override (I4) then perform the one rename (§5.8)."""
-    from ..config import Mode  # noqa: PLC0415
+    from ..config import Mode
 
     old_dest = Path(row["dest_path"])
     mode = Mode(row["mode"]) if row["mode"] else config.mode

@@ -14,7 +14,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from probe_md_checkpoint import CHECKPOINT, install_yolov5_aliases  # noqa: E402
+from probe_md_checkpoint import CHECKPOINT, install_yolov5_aliases
 
 
 def main() -> int:

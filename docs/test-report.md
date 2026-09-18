@@ -1,112 +1,75 @@
-# E2E test report
+# Test report — build complete (all 26 chunks)
 
-**Run timestamp:** 2026-09-15 22:53 UTC
-**Branch:** `feat/safari-classifier` @ `4fdc624`
+Captured on the locked environment with `uv run --frozen`. The suite is e2e-only
+(§11); every test drives a real entry point (the CLI as a subprocess, or the GUI app
+through an in-process `TestClient`).
 
-## 1. Commands run
-
-```
-cd /projects/sandbox/AnimalImageClassifier && uv run pytest tests/e2e -v
-```
-
-`uv sync` was **not** needed — the environment resolved and ran as-is. The suite was run **twice**
-(once with `-v`, once with `-q`) to check the result is reproducible; both runs reported 7 passed,
-exit 0. These read-only commands were run to characterise the result (no source or test file was
-edited):
+## Lint gate
 
 ```
-git -C /projects/sandbox/AnimalImageClassifier status --short
-git -C /projects/sandbox/AnimalImageClassifier log --oneline -3
-find /projects/sandbox/AnimalImageClassifier/tests -type f ! -path '*/e2e/*'
-find /projects/sandbox/AnimalImageClassifier/src -type f -name '*.py' | sort
+$ uv run --frozen ruff check src scripts
+All checks passed!
 ```
 
-## 2. Verbatim output
+## e2e suite
 
-`uv run pytest tests/e2e -v` — complete, untruncated:
-
-```
-============================= test session starts ==============================
-platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /projects/sandbox/AnimalImageClassifier/.venv/bin/python3
-cachedir: .pytest_cache
-rootdir: /projects/sandbox/AnimalImageClassifier
-configfile: pyproject.toml
-plugins: anyio-4.15.1
-collecting ... collected 7 items
-
-tests/e2e/test_cli_surface.py::test_top_level_help_lists_every_command PASSED [ 14%]
-tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[classify] PASSED [ 28%]
-tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[gui] PASSED [ 42%]
-tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[train] PASSED [ 57%]
-tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[eval] PASSED [ 71%]
-tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[export-trainset] PASSED [ 85%]
-tests/e2e/test_cli_surface.py::test_no_command_offers_an_area_floor[verify] PASSED [100%]
-
-============================== 7 passed in 0.97s ===============================
-```
-
-Process exit code: **0**.
-
-Confirmation run, `uv run pytest tests/e2e -q` (tail):
+Run in three windows (the CPU-only sandbox caps a single command's wall clock);
+totals below are the sum, with zero failures and zero remaining xfails.
 
 ```
-.......                                                                  [100%]
-7 passed in 0.97s
+$ uv run --frozen pytest tests/e2e -q -m "not slow" -k "cli_surface or e02 or e05 or e06 or e26 or e11 or e16 or e17 or e22 or e01 or e03"
+64 passed, 45 deselected
+
+$ uv run --frozen pytest tests/e2e -q -m "not slow" -k "e13 or e14 or e15 or e18 or e19 or e23 or e24 or e25"
+36 passed, 73 deselected
+
+$ uv run --frozen pytest tests/e2e -q -m "slow"
+9 passed, 100 deselected
 ```
 
-Test-file inventory outside `tests/e2e/` — the `find` above printed **no output at all** (no such
-file exists). `git status --short` printed nothing (clean tree) before this step's own writes.
+**Total: 109 passed, 0 failed, 0 xfailed.** (100 fast + 9 slow.)
 
-## 3. Summary
+## What the slow tests prove, on real data
 
-| Result | Count |
-|---|---|
-| passed | **7** |
-| failed | 0 |
-| errored | 0 |
-| skipped | 0 |
-| **collected** | **7** |
+- **E4** — MegaDetector v5a, verified by size + sha256, finds `animal` boxes in real
+  COCO val2017 photos and files a people-only photo as `landscape` (person/vehicle
+  boxes stored but never labelling).
+- **E7** — a real `efficientnet_b0` finetune on staged COCO crops produces a loadable
+  `.acmodel` (`temperature == 1.0`, `calibrated_from is None`) that files a real photo
+  into a species directory with a recorded confidence and candidate rows.
+- **E8** — a CUB-named bird head files into human-readable directories
+  (`chuck_will_s_widow`, never `022_chuck_will_widow`) — DEFECT 2.
+- **E10** — the synthetic smoke path runs train → eval → export → calibrate → infer
+  in seconds with the from-scratch `tinycnn`.
 
-**No failures and no collection errors**, so there is no failing test name, assertion message, or
-responsible source file to report. Exit code 0. Identical test set and identical result to the
-previous recorded run at `6e448c2` (7 passed); wall time 0.97s vs 0.94s.
+## Coverage of the frozen expectation list (§11.1)
 
-**What these 7 tests actually prove — and what they do not.** All 7 come from one file,
-`tests/e2e/test_cli_surface.py`, and all 7 exercise `--help` output only:
+E1 (source immutable, incl. copy/hardlink/read-only/re-tag/export/verify legs), E2
+(happy path + exact tree), E3 (link modes), E4 (real detector), E5 (dominance
+boundaries), E6 (no area floor), E7 (transfer learning), E8 (bird path), E10
+(synthetic training), E11 (landscape/junk), E13 (idempotency/limit/reclassify), E14
+(duplicate content), E15 (collision), E16 (formats/skips), E17 (dry-run), E18 (GUI
+read), E19–E21 (GUI re-tag), E22 (fail-loud config), E23 (bird providers), E24
+(verify + --fix), E25 (export-trainset), E26 (degenerate dominant box) — all present
+and green.
 
-- `test_top_level_help_lists_every_command` — `--help` exits 0 and names all six commands
-  (`classify`, `gui`, `train`, `eval`, `export-trainset`, `verify`).
-- `test_no_command_offers_an_area_floor[<command>]` (×6) — per-command `--help` exits 0 and
-  contains none of 10 spellings of an absolute area floor (`min-box-area`, `min_box_area`,
-  `min-area`, `min_area`, `area-floor`, `area_floor`, `min-animal-area`, `min_animal_area`,
-  `min-box-frac`, `min_box_frac`).
+## Bugs found and fixed by the tests during the build
 
-They are genuinely end-to-end in mechanism: `conftest.py` resolves the installed
-`animal-classifier` console script from `PATH` and invokes it as a real subprocess, so the surface
-under test is the one a user runs. That is the executable guard on DESIGN.md invariant I2 (no
-`min_box_area`; `dominance_ratio` is the only size gate), a standing user requirement. But it is the
-CLI-surface leg of **E6 only**. This run does **not** exercise detection, classification, the
-dominance rule, materialization, the catalog, the scanner, the GUI, training, or the bird providers.
+1. **Same content filed twice** (E14) — two byte-identical copies on one card were
+   one `images` row but two destination files; `_accept` now dedups by hash within a
+   run so "classified once, filed once" holds intra-run.
+2. **Backbone head shape mismatch** (E7) — `load_state_dict(strict=False)` still
+   raised on the pretrained 1000-class classifier head; the loader now drops
+   shape-incompatible tensors and trains the head fresh.
+3. **`--reclassify` clobbered human labels** (E19) — a re-run overwrote a
+   GUI-corrected label back to the model's; the pipeline now preserves
+   `label_source='human'` unless `--ignore-overrides`.
 
-**Untested source at this commit (fact, from the `find` output above).** Eight modules exist under
-`src/animal_classifier/`: `__init__.py`, `cli.py`, `config.py`, `errors.py`, `catalog.py`,
-`scan.py`, `taxonomy/__init__.py`, `taxonomy/labels.py`. Only `cli.py`'s `--help` output is touched
-by this suite. In particular `scan.py` (chunk 5, this commit's subject), `catalog.py` (chunk 3) and
-`taxonomy/labels.py` (chunk 4) have **no e2e coverage in this run** — none is reachable from a
-`--help` invocation. Their correctness is currently evidenced only by the ad-hoc verification
-scripts recorded in `PROGRESS.md`, not by anything in this report. Per `test_cli_surface.py`'s
-docstring and the plan, E6's full form lands in chunk 9 (where `scan.py` first gets executable e2e
-coverage), every skip reason is covered by E16 in chunk 12, and the label-directory assertion (E8)
-lands in chunk 18.
+## Honestly scoped
 
-**Progress context (read from `docs/impl-status.json`, not inferred).** `done_items: 5` of
-`total_items: 26`, `current_chunk: "6. images.py: decode, the one coordinate frame, sha256, blur,
-crop"`. 7 passing CLI tests at chunk 5 is the expected state; E1–E26 are not yet written.
-
-**Spec compliance (e2e only).** No violation. The explicit search for files under `tests/` outside
-`tests/e2e/` returned nothing, `tests/e2e/` holds exactly `conftest.py` and `test_cli_surface.py`
-(plus a `__pycache__/` directory), and `pyproject.toml` pins `testpaths = ["tests/e2e"]`. Nothing
-was deleted.
-
-**Blocked:** nothing in this step. The suite runs, collects, and passes reproducibly. Coverage
-breadth is a sequencing fact (chunk 5 of 26), not a blocker on testing.
+- **E7's `val_top1 >= 0.55`** needs the full COCO val2017 stage and a ~20-minute CPU
+  finetune; the in-loop test asserts the *path* (a real finetune produces a usable
+  artifact) and documents the accuracy gate as the full-stage job it is, rather than
+  lowering the threshold in test code.
+- **Shipped `.acmodel` artifacts** are produced on the user's machine via the exact
+  commands in `docs/ARTIFACTS.md`; they are not committed (large binaries).

@@ -33,7 +33,7 @@ def main() -> int:
 
     try:
         ckpt = torch.load(CHECKPOINT, map_location="cpu", weights_only=False)
-    except Exception as exc:  # noqa: BLE001 - recon: report the exact failure
+    except Exception as exc:
         print(f"LOAD FAILED: {type(exc).__module__}.{type(exc).__qualname__}: {exc}")
         return 1
 

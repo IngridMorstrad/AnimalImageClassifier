@@ -43,7 +43,7 @@ __all__ = [
 def __getattr__(name: str) -> object:
     """Lazily expose :class:`MegaDetector` without importing torch at package load."""
     if name == "MegaDetector":
-        from .megadetector import MegaDetector  # noqa: PLC0415
+        from .megadetector import MegaDetector
 
         return MegaDetector
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

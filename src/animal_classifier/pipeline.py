@@ -143,7 +143,7 @@ def build_detector(config: Config) -> Detector:
     if config.detector is DetectorKind.SCRIPTED:
         return ScriptedDetector(confidence=config.detector_confidence)
     if config.detector is DetectorKind.MEGADETECTOR:
-        from .detect import MegaDetector  # noqa: PLC0415 - heavy torch import path
+        from .detect import MegaDetector
 
         return MegaDetector.load(
             config.detector_weights,
@@ -169,7 +169,7 @@ def build_classifier(config: Config) -> Any:
     that, so by the time we get here the path either exists or species inference is
     switched off.
     """
-    from .config import SPECIES_INFERENCE_WIRED  # noqa: PLC0415
+    from .config import SPECIES_INFERENCE_WIRED
 
     if not SPECIES_INFERENCE_WIRED:
         return None
@@ -179,7 +179,7 @@ def build_classifier(config: Config) -> Any:
         # guard keeps the pass-through path available for a run that pointed at no
         # model on purpose.
         return None
-    from .classify.own_model import SpeciesClassifier  # noqa: PLC0415
+    from .classify.own_model import SpeciesClassifier
 
     return SpeciesClassifier.from_path(config.species_model)
 
@@ -533,7 +533,7 @@ def _score(
     candidates: dict[int, list[Any]] = {}
     if classifier is not None and classifiable:
         predictions = classifier.classify([image for _, image in classifiable])
-        for (index, _), (prediction, box_candidates) in zip(classifiable, predictions):
+        for (index, _), (prediction, box_candidates) in zip(classifiable, predictions, strict=True):
             scored[index] = ScoredBox(
                 box=scored[index].box,
                 species=prediction,
@@ -686,7 +686,7 @@ def _bounded_map(
         item, future = pending.popleft()
         try:
             yield item, future.result(), None
-        except BaseException as error:  # noqa: BLE001 - reported, not swallowed
+        except BaseException as error:
             yield item, None, error
         nxt = next(remaining, None)
         if nxt is not None:

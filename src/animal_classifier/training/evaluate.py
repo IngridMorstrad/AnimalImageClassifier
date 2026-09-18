@@ -58,7 +58,7 @@ def evaluate(artifact: Artifact, samples: list[Sample], *, device: str = "cpu") 
             correct1 += int(hit[:, 0].sum().item())
             correct5 += int(hit.any(dim=1).sum().item())
             total += targets.size(0)
-            for t, h1 in zip(targets.tolist(), hit[:, 0].tolist()):
+            for t, h1 in zip(targets.tolist(), hit[:, 0].tolist(), strict=True):
                 per_class_total[t] += 1
                 per_class_correct[t] += int(h1)
     total = max(total, 1)

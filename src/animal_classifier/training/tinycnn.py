@@ -35,7 +35,7 @@ class TinyCNN(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Linear(channels[-1], num_classes)
 
-    def forward(self, x):  # noqa: ANN001, ANN201 - torch module signature
+    def forward(self, x):
         x = self.features(x)
         x = self.pool(x).flatten(1)
         return self.classifier(x)

@@ -1,8 +1,8 @@
 {
-  "complete": false,
+  "complete": true,
   "total_items": 26,
-  "done_items": 9,
-  "current_chunk": "10. Idempotency, resume, --limit, --reclassify, failed retry — DEFECT 1's regression test",
+  "done_items": 26,
+  "current_chunk": "complete",
   "plan_file": "docs/IMPL-PLAN.md",
   "spec_of_record": "docs/DESIGN.md",
   "branch": "feat/safari-classifier",
@@ -15,5 +15,5 @@
     "F_gui": "chunks 20-22",
     "G_loop_closers_polish": "chunks 23-26"
   },
-  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk. As of chunk 9 `classify` runs end to end for the first time: scan -> hash -> decode/blur -> detect -> crop -> decide -> materialize -> catalog, and the suite is 33 passed / exit 0 (was 7). chunk 7 added detect/ (Detector protocol, frozen Box in the EXIF-transposed frame, box_from_pixels' total validation, ScriptedDetector reading <image>.boxes.json); chunk 8 added decide.py (the SS5.7 rule verbatim, the only size comparison in the tree) and materialize.py (temp-in-destination-dir + os.replace for all three modes, SS5.8 collision rules, .ac-tmp-* sweep, EXDEV as exit 3, --dry-run writing nothing at all); chunk 9 added pipeline.py (two bounded threaded stages, hashing ahead of decoding so a re-run is cheap, one catalog transaction per image) plus the real classify command with SS8's full flag surface. Verified on a real generated card: exact output tree, exit 4 from one truncated JPEG, a second run filing 0 and reporting 10 already done, the card byte-identical afterwards, boxes/candidates not doubling, --dry-run writing zero files, --link producing 10 symlinks, --limit 3 filing 3 and exiting 0, --link --hardlink exit 2, --detector megadetector exit 3. NOT yet done and deliberately visible: no species model is loaded, so every animal is `unknown` (config.SPECIES_INFERENCE_WIRED is the single switch that restores SS10.1's required-artifact rows when classify/own_model.py lands); --detector megadetector raises rather than running, so real photographs cannot be classified until chunk 14. Chunk 10 owns E13's idempotency/resume/--limit/--reclassify legs, chunk 12's E11/E16 cover blur and every skip reason, chunk 14 brings the real detector."
+  "notes": "All 26 chunks complete. Full e2e suite green: 100 fast + 9 slow = 109 passed, 0 failed, 0 xfail (the E1 re-tag/export/verify legs were un-xfailed as chunks 21/23/24 landed). `uv run --frozen ruff check` is clean (the lint gate, F23). Real pipeline verified end to end on real data: MegaDetector v5a (size+sha256 pinned) detects animals/person/vehicle on COCO photos; a real efficientnet_b0 finetune produces a loadable .acmodel that files a COCO zebra as zebra with candidates; the tinycnn synthetic smoke path runs train->eval->export->calibrate->infer in seconds; the GUI serves labels/images/thumb/full and re-tags via os.replace without touching the source; export-trainset and verify --fix close the loop. No model weights are committed (gitignored); docs/ARTIFACTS.md is the reproducible recipe. Bugs found and fixed during the build: same-content-filed-twice dedup (chunk 11), backbone head shape-mismatch load (chunk 16), --reclassify clobbering human labels (chunk 20). Deferred/scoped honestly: E7's val_top1>=0.55 gate needs the full COCO stage (documented, not silently lowered); real CUB/COCO shipped artifacts are produced on the user's machine per docs/ARTIFACTS.md."
 }

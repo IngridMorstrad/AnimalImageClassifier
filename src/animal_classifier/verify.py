@@ -149,7 +149,7 @@ def _apply_fixes(config: Config, findings: list[dict[str, Any]]) -> tuple[int, l
 
 
 def _mark_done(config: Config, sha256: str) -> None:
-    from .catalog import Catalog, GUI_BUSY_TIMEOUT_MS, Status  # noqa: PLC0415
+    from .catalog import GUI_BUSY_TIMEOUT_MS, Catalog, Status
 
     with Catalog.open(config.catalog_path, busy_timeout_ms=GUI_BUSY_TIMEOUT_MS) as catalog:
         catalog.update_image(sha256, status=str(Status.DONE))

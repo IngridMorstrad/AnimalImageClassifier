@@ -135,7 +135,7 @@ class MegaDetector:
         trusted (§10.1). ``jobs`` sets ``torch.set_num_threads`` when given, matching
         §9's "torch parallelizes internally" note.
         """
-        import torch  # noqa: PLC0415 - heavy import, only when the real detector runs
+        import torch
 
         _verify_asset(weights)
         _install_yolov5_aliases()
@@ -150,7 +150,7 @@ class MegaDetector:
                 f"cannot unpickle {weights} ({error}); the yolov5 package must be "
                 "installed — re-sync with `uv sync --frozen`"
             ) from error
-        except Exception as error:  # noqa: BLE001 - any unpickle failure is fatal/config
+        except Exception as error:
             raise AssetError(
                 f"cannot load MegaDetector checkpoint {weights}: "
                 f"{type(error).__name__}: {error}. Re-download from {DOWNLOAD_URL}"
@@ -189,16 +189,18 @@ class MegaDetector:
         the exception it is; the pipeline records that one image as ``failed`` and
         the run continues (§10.1), so this method does not swallow anything.
         """
-        import torch  # noqa: PLC0415
-        from yolov5.utils.augmentations import letterbox  # noqa: PLC0415
-        from yolov5.utils.general import non_max_suppression, scale_boxes  # noqa: PLC0415
+        import torch
+        from yolov5.utils.augmentations import letterbox
+        from yolov5.utils.general import non_max_suppression, scale_boxes
 
         # Pillow RGB -> HWC uint8 array. decode() already applied exif_transpose and
         # convert("RGB"), so this array is in the one frame.
         original = np.asarray(decoded.image)
-        letterboxed, ratio, pad = letterbox(
+        # scale_boxes re-derives the letterbox ratio/pad from the two shapes, so
+        # the ratio and pad letterbox() returns are not needed here.
+        letterboxed = letterbox(
             original, new_shape=self._image_size, stride=_STRIDE, auto=False
-        )
+        )[0]
         # HWC -> CHW, contiguous, float32 in [0, 1].
         tensor = torch.from_numpy(
             np.ascontiguousarray(letterboxed.transpose(2, 0, 1))

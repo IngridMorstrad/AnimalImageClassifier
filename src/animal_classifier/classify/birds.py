@@ -107,9 +107,7 @@ def rerank_by_observations(
             rescored.append(cand)
             continue
         matched = False
-        if alias.ebird_sci_name and alias.ebird_sci_name.casefold() in observed_sci:
-            matched = True
-        elif alias.ebird_com_name and casefold_alnum(alias.ebird_com_name) in observed_com:
+        if (alias.ebird_sci_name and alias.ebird_sci_name.casefold() in observed_sci) or (alias.ebird_com_name and casefold_alnum(alias.ebird_com_name) in observed_com):
             matched = True
         if matched:
             rescored.append(cand)
@@ -131,7 +129,7 @@ def load_alias_table(rows: list[tuple[str, str, str]], *, label_space: set[str])
     already stripped). Every ``cub_key`` must exist in the bird artifact's label
     space, and a row with both name columns empty is a typo, not data.
     """
-    from ..errors import ConfigError  # noqa: PLC0415
+    from ..errors import ConfigError
 
     table: dict[str, EBirdAlias] = {}
     for lineno, (cub_key, com, sci) in enumerate(rows, start=2):  # +1 header, +1 1-based

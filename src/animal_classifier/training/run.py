@@ -9,7 +9,7 @@ happen only when these commands actually run.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 def resolve_device(requested: str) -> str:
     """`auto`→cpu/cuda; explicit `cuda` on a CPU host is fatal (§7.3, I7)."""
-    import torch  # noqa: PLC0415
+    import torch
 
     if requested == "cuda" and not torch.cuda.is_available():
         raise ConfigError(
@@ -89,13 +89,13 @@ def run_train(
     device: str,
 ) -> trainer_mod.TrainResult:
     """Build the dataset, train, and write the artifact. Returns the metrics."""
-    import torch  # noqa: PLC0415
+    import torch
 
     resolved_device = resolve_device(device)
     torch.set_num_threads(max(1, jobs))
 
     if dataset == "synthetic":
-        from .synthetic import generate  # noqa: PLC0415
+        from .synthetic import generate
 
         synth_root = out.parent / "_synthetic_data"
         manifest = generate(synth_root, seed=seed)
@@ -126,7 +126,7 @@ def run_train(
         manifest_id=manifest_id,
     )
 
-    created = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    created = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     model_id = f"species-{arch}-{created}"
     artifact_mod.save(
         out,

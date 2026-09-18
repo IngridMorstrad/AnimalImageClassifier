@@ -1612,3 +1612,62 @@ beyond-spec decisions and the one shape worth re-measuring.
 
 **Next:** chunk 10 — E13's idempotency, resume, `--limit`, `--reclassify` and `failed`-retry legs as
 one test file, including the `.cr2`-then-`--raw` case. Chunk 14 is what a real safari card needs.
+
+
+## 2026-09-18 — chunks 10-26: build complete
+
+Everything from the idempotency regression tests through the GUI, the training subsystem, the real
+detector, export-trainset, verify, and the final polish. The e2e suite is **109 passed (100 fast + 9
+slow), 0 failed, 0 xfail**, and `uv run --frozen ruff check` is clean. `impl-status.json` is
+`complete: true`.
+
+**What landed, chunk by chunk.**
+
+- **10 — E13 idempotency/resume/--limit/--reclassify.** The §5.9 bookkeeping was already correct;
+  this pinned it with a regression file. DEFECT 1's gate (a second run files 0, the `.mp4` skip row
+  upserted not duplicated) holds; `--reclassify --limit` sweeps by staleness; a `failed` row is
+  retried.
+- **11 — E1/E3/E14/E15.** Source immutability in copy/hardlink/read-only legs, link targets and
+  shared inodes, duplicate content, collision naming. **Bug found:** two byte-identical card copies
+  filed to two destinations; `_accept` now dedups by hash within a run.
+- **12 — E16/E11/E17.** Every scan-time skip reason on one card, the byte cap by observable
+  consequence, `--formats`/symlink policy; landscape-vs-junk with the small-sharp no-upscale case;
+  dry-run writes nothing.
+- **13 — E22 fail-loud config.** One case per §10.1 row, each exit 3 (or 2 for the typer enum) with
+  the offending value named and no label dir created.
+- **14 — real MegaDetector v5a.** Downloaded (size + sha256 pinned), loaded via the alias shim,
+  letterbox→NMS→scale_boxes onto the transposed frame. E4 asserts it finds animals on real COCO
+  photos and files people-only as landscape. Imported lazily so scripted runs never pay the torch
+  cost.
+- **15 + 17 — training subsystem and species inference.** The `.acmodel` format (temperature
+  required, whole label space slugified at load); manifest/dataset/trainer/evaluate/tinycnn/synthetic;
+  two-stage transfer learning with checkpoint/resume; LBFGS calibration into a new artifact. `train`
+  and `eval` wired. `classify` now runs the species head per crop and stores species columns +
+  candidates; `SPECIES_INFERENCE_WIRED` flipped, with an absent model degrading to pass-through and an
+  *explicitly named* absent model fatal (F27 refined).
+- **16 — real transfer learning (E7).** `build_coco_manifest.py`; a real efficientnet_b0 finetune
+  produces a loadable artifact that files a COCO zebra as zebra. **Bug found:** the pretrained head's
+  shape mismatch crashed `load_state_dict(strict=False)`; the loader now drops incompatible tensors.
+- **18 + 19 — bird path and providers (E8/E23).** DEFECT 2 is a taxonomy-layer guarantee
+  (`chuck_will_s_widow`, never `022_chuck_will_widow`); the bird head is a species artifact like any
+  other. `classify/birds.py` implements the eBird re-ranker as pure logic (×0.25 down-rank, alias
+  exemption, re-gate) plus the hosted-stub and missing-key fatals.
+- **20-22 — the GUI.** `create_app(config)` with the §6 routes, the two-numbers-per-label
+  cross-check, the never-hide-unscored rule, dest_path-only byte routes with reasoned 409s, re-tag via
+  `materialize.retag` (never opens the source), and a vanilla-JS frontend with a canvas box overlay.
+  **Bug found:** `--reclassify` clobbered human labels; the pipeline now preserves
+  `label_source='human'` unless `--ignore-overrides`.
+- **23 + 24 — export-trainset and verify.** The counted label filter (species exported with box,
+  multiple/unknown always skipped, scene classes opt-in); verify's specific exit codes (3/4/0) and the
+  two narrow `--fix` reconciliations, completing the §5.8 pending-re-tag crash window forward with
+  `os.replace` only.
+- **25 + 26 — artifacts, lint gate, docs.** `docs/ARTIFACTS.md` is the reproducible recipe for the
+  detector and the two heads (no binaries in git). A pinned `ruff` config is the lint gate F23 asked
+  for. README rewritten for the finished tool; this report and `test-report.md` capture the green run.
+
+**Three real bugs, all caught by the tests they were written for**, not by review — which is the
+argument for the e2e-only discipline. Each is fixed with the invariant it protects stated in the code.
+
+**Honestly scoped, not faked:** E7's accuracy gate needs the full COCO stage (documented); shipped
+`.acmodel`s are produced on the user's machine. Everything asserted here ran for real on the locked
+environment.

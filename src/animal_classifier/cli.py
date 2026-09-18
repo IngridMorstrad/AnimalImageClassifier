@@ -226,7 +226,7 @@ def _classify(overrides: dict[str, Any]) -> int:
     traceback only at ``-v``, because a stack trace is a diagnostic and the default
     output should stay readable.
     """
-    from .pipeline import classify_run  # noqa: PLC0415 - imports torch-adjacent deps
+    from .pipeline import classify_run
 
     try:
         config = Config.resolve(
@@ -311,12 +311,12 @@ def _gui(*, output: Path | None, port: int, allow_new_labels: bool) -> int:
                 "no catalog at %s; run `animal-classifier classify SOURCE --output %s` first",
                 config.catalog_path, config.output_root,
             )
-            from .errors import EXIT_CONFIG  # noqa: PLC0415
+            from .errors import EXIT_CONFIG
 
             return EXIT_CONFIG
-        import uvicorn  # noqa: PLC0415
+        import uvicorn
 
-        from .gui.app import create_app  # noqa: PLC0415
+        from .gui.app import create_app
 
         gui_app = create_app(config)
         log.info("serving the review GUI at http://127.0.0.1:%d", port)
@@ -360,7 +360,7 @@ def train(
 
 
 def _train(**kwargs: Any) -> int:
-    from .training.run import run_train  # noqa: PLC0415
+    from .training.run import run_train
 
     try:
         run_train(**kwargs)
@@ -391,11 +391,11 @@ def eval(
 
 def _eval(*, manifest: Path, model: Path, split: str, calibrate: bool,
           out: Path | None, device: str) -> int:
-    from .classify.artifact import load as load_artifact  # noqa: PLC0415
-    from .errors import ConfigError  # noqa: PLC0415
-    from .training import evaluate as ev  # noqa: PLC0415
-    from .training.manifest import load_manifest  # noqa: PLC0415
-    from .training.run import resolve_device  # noqa: PLC0415
+    from .classify.artifact import load as load_artifact
+    from .errors import ConfigError
+    from .training import evaluate as ev
+    from .training.manifest import load_manifest
+    from .training.run import resolve_device
 
     try:
         if calibrate and out is None:
@@ -432,9 +432,9 @@ def _eval(*, manifest: Path, model: Path, split: str, calibrate: bool,
 
 def _calibrate_to_new_artifact(artifact, samples, model_path, out, device, ev) -> None:
     """Fit a temperature and write a NEW artifact with a derived model_id (§7.4)."""
-    import torch  # noqa: PLC0415
+    import torch
 
-    from .classify.artifact import save as save_artifact  # noqa: PLC0415
+    from .classify.artifact import save as save_artifact
 
     temperature = ev.fit_temperature(artifact, samples, device=device)
     blob = torch.load(model_path, map_location="cpu", weights_only=False)
@@ -484,7 +484,7 @@ def export_trainset(
 
 
 def _export_trainset(**kwargs: Any) -> int:
-    from .export_trainset import run_export  # noqa: PLC0415
+    from .export_trainset import run_export
 
     try:
         config = Config.resolve(
@@ -524,7 +524,7 @@ def verify(
 
 
 def _verify(*, output: Path | None, json_out: bool, fix: bool) -> int:
-    from .verify import run_verify  # noqa: PLC0415
+    from .verify import run_verify
 
     try:
         config = Config.resolve(
@@ -541,7 +541,7 @@ def _verify(*, output: Path | None, json_out: bool, fix: bool) -> int:
                   exc_info=log.isEnabledFor(logging.DEBUG))
         return EXIT_UNEXPECTED
     if json_out:
-        import json as _json  # noqa: PLC0415
+        import json as _json
 
         typer.echo(_json.dumps(report, indent=2))
     else:

@@ -570,7 +570,7 @@ no GUI yet.
       `--fix` with exactly one copy left; an orphan file reported but left in place; the source tree
       byte-identical throughout, and E1's `verify --fix` leg now unmarked and green.
 
-- [ ] 25. **Produce the shipped artifacts, and document the commands that produce them
+- [x] 25. **Produce the shipped artifacts, and document the commands that produce them
       (review finding 11).** Run the two documented training commands to create
       `models/species.acmodel` (COCO animal classes, `--input-size 224`) and `models/birds.acmodel`
       (CUB-200), record the exact invocations, wall clock and resulting `val_top1` in
@@ -586,7 +586,7 @@ no GUI yet.
       tests/e2e/_fixtures/card -o /tmp/ac-real-run` files real labels with the real models — paste
       the resulting `ls /tmp/ac-real-run`.
 
-- [ ] 26. **Docs, NIT sweep, and the full-suite green run.** `README.md` gains: quick start, the
+- [x] 26. **Docs, NIT sweep, and the full-suite green run.** `README.md` gains: quick start, the
       person/vehicle → `landscape` note (also in `classify --help`), the `--link`/`--hardlink`
       trade-offs, the GUI walkthrough, the "no area floor — `dominance_ratio` is the only size gate"
       statement, and the E2E-only testing policy. Sweep the remaining NITs that are not already

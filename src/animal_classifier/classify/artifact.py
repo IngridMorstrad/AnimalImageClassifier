@@ -104,17 +104,17 @@ def build_module(arch: str, num_classes: int) -> Any:
     from the artifact's state dict, never from a download at load time.
     """
     if arch == "tinycnn":
-        from ..training.tinycnn import TinyCNN  # noqa: PLC0415
+        from ..training.tinycnn import TinyCNN
 
         return TinyCNN(num_classes=num_classes)
-    import timm  # noqa: PLC0415
+    import timm
 
     return timm.create_model(arch, pretrained=False, num_classes=num_classes)
 
 
 def load(path: Path) -> Artifact:
     """Load and fully validate an ``.acmodel`` artifact (§7.1). Fatal on any problem."""
-    import torch  # noqa: PLC0415
+    import torch
 
     if not path.exists():
         raise AssetError(
@@ -123,7 +123,7 @@ def load(path: Path) -> Artifact:
         )
     try:
         blob = torch.load(path, map_location="cpu", weights_only=False)
-    except Exception as error:  # noqa: BLE001 - any load failure is fatal/config
+    except Exception as error:
         raise AssetError(
             f"cannot load artifact {path}: {type(error).__name__}: {error}"
         ) from error
@@ -171,7 +171,7 @@ def load(path: Path) -> Artifact:
     module = build_module(str(blob["arch"]), len(labels))
     try:
         module.load_state_dict(blob["state_dict"], strict=True)
-    except Exception as error:  # noqa: BLE001 - a mismatch is fatal/config
+    except Exception as error:
         raise AssetError(
             f"artifact {path} state_dict does not match arch {blob['arch']!r} with "
             f"{len(labels)} classes: {error}"
@@ -264,7 +264,7 @@ def save(
     train_meta: dict[str, Any] | None = None,
 ) -> None:
     """Write an ``.acmodel`` artifact (§7.1). Used by ``train`` and ``eval --calibrate``."""
-    import torch  # noqa: PLC0415
+    import torch
 
     path.parent.mkdir(parents=True, exist_ok=True)
     blob = {

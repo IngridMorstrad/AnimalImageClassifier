@@ -291,7 +291,7 @@ def _decode_raw(path: Path) -> DecodedImage:
     array in the same frame ``exif_transpose`` would have produced.
     """
     try:
-        import rawpy  # noqa: PLC0415 - optional extra, imported only when used
+        import rawpy
     except ModuleNotFoundError as error:
         raise ConfigError(f"--raw was given but {_RAW_EXTRA_HINT}") from error
 

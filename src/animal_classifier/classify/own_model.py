@@ -47,7 +47,7 @@ class SpeciesClassifier:
     def model_id(self) -> str:
         return self._artifact.model_id
 
-    def classify(self, crops):  # noqa: ANN001, ANN201
+    def classify(self, crops):
         """Top prediction + ranked candidates for each crop image.
 
         ``crops`` is a sequence of PIL images (the pipeline's degenerate crops are
@@ -55,8 +55,8 @@ class SpeciesClassifier:
         ``(SpeciesPrediction, [Candidate, ...])`` — or ``(None, [])`` for an empty
         input, so the caller never special-cases the no-crops image.
         """
-        import torch  # noqa: PLC0415
-        from torchvision import transforms  # noqa: PLC0415
+        import torch
+        from torchvision import transforms
 
         if not crops:
             return []
@@ -64,7 +64,7 @@ class SpeciesClassifier:
         art = self._artifact
         transform = transforms.Compose(
             [
-                transforms.Resize(int(round(art.input_size * 1.14))),
+                transforms.Resize(round(art.input_size * 1.14)),
                 transforms.CenterCrop(art.input_size),
                 transforms.ToTensor(),
                 transforms.Normalize(art.mean, art.std),
@@ -78,7 +78,7 @@ class SpeciesClassifier:
         results = []
         maxk = min(5, probs.size(1))
         top_scores, top_indices = probs.topk(maxk, dim=1)
-        for scores, indices in zip(top_scores.tolist(), top_indices.tolist()):
+        for scores, indices in zip(top_scores.tolist(), top_indices.tolist(), strict=True):
             candidates = [
                 Candidate(
                     rank=rank + 1,
@@ -86,7 +86,7 @@ class SpeciesClassifier:
                     scientific=art.labels[idx].scientific,
                     score=score,
                 )
-                for rank, (idx, score) in enumerate(zip(indices, scores))
+                for rank, (idx, score) in enumerate(zip(indices, scores, strict=True))
             ]
             best = art.labels[indices[0]]
             prediction = SpeciesPrediction(

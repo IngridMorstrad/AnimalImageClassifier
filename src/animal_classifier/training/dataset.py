@@ -43,7 +43,7 @@ def train_transform(input_size: int) -> transforms.Compose:
 def eval_transform(input_size: int) -> transforms.Compose:
     return transforms.Compose(
         [
-            transforms.Resize(int(round(input_size * 1.14))),
+            transforms.Resize(round(input_size * 1.14)),
             transforms.CenterCrop(input_size),
             transforms.ToTensor(),
             transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),

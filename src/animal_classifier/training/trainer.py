@@ -57,10 +57,10 @@ def manifest_sha256(path: Path) -> str:
 
 def _build_model(arch: str, num_classes: int) -> nn.Module:
     if arch == "tinycnn":
-        from .tinycnn import TinyCNN  # noqa: PLC0415
+        from .tinycnn import TinyCNN
 
         return TinyCNN(num_classes=num_classes)
-    import timm  # noqa: PLC0415
+    import timm
 
     # pretrained=False: E7's backbone weights are loaded separately from a local
     # path (the sandbox blocks the pretrained download); the smoke path needs none.

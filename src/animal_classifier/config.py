@@ -249,9 +249,7 @@ class Config:
         for key, value in asdict(self).items():
             if key == "ebird_api_key":
                 out["ebird_api_key_present"] = value is not None
-            elif isinstance(value, Path):
-                out[key] = str(value)
-            elif isinstance(value, enum.StrEnum):
+            elif isinstance(value, Path) or isinstance(value, enum.StrEnum):
                 out[key] = str(value)
             elif isinstance(value, tuple):
                 out[key] = [str(v) for v in value]

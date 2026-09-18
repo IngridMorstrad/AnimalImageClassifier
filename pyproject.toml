@@ -30,7 +30,28 @@ raw = ["rawpy==0.27.1"]
 # `uv run --frozen pytest tests/e2e -q` resolve on a clean machine; as an extra it
 # only worked because the local venv already had pytest.
 [dependency-groups]
-dev = ["pytest==9.1.1"]
+dev = ["pytest==9.1.1", "ruff==0.14.1"]
+
+[tool.ruff]
+# The lint gate F23 asked for: a deliberate ruleset pinned in-repo so a 26-chunk
+# build reviewed by reading diffs has a mechanical backstop. Run: `uv run --frozen
+# ruff check`.
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "C4", "PLC", "RUF"]
+# B008 is typer's Argument/Option-in-default idiom (the documented pattern);
+# PLC0415 (import-outside-top-level) is our deliberate lazy-import strategy for the
+# torch-heavy modules; E501 (line length) is relaxed for the prose-heavy docstrings
+# this project uses to record design intent; RUF002/RUF003 flag unicode (§, ×, →)
+# that appears on purpose in those docstrings. All intentional and codebase-wide.
+ignore = ["B008", "PLC0415", "E501", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests import fixtures after a sys.path insert, and use assert freely.
+"tests/**" = ["E402"]
+"scripts/**" = ["E402"]
 
 [project.scripts]
 animal-classifier = "animal_classifier.cli:app"
