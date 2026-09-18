@@ -7,16 +7,28 @@ each image, and files each photo under `~/animal_pics/<label>/` by copy (default
 See [docs/PLAN.md](docs/PLAN.md) for the design and [docs/PROGRESS.md](docs/PROGRESS.md) for
 the timestamped build log.
 
-## Status: under construction — no command does its job yet
+## Status: `classify` runs, but it cannot recognise a species yet
 
-**Every command below is a placeholder that prints `not implemented yet` and exits 1.**
-6 of the 26 chunks in [docs/IMPL-PLAN.md](docs/IMPL-PLAN.md) are done: `config.py`,
-`catalog.py`, `taxonomy/`, `scan.py` and `images.py` exist and are exercised, but `detect/`,
-`classify/`, `decide.py`, `materialize.py`, `training/` and `gui/` do not. Nothing writes to
-the output directory yet.
+9 of the 26 chunks in [docs/IMPL-PLAN.md](docs/IMPL-PLAN.md) are done.
 
-`classify` first does real work at chunk 9, with the scripted test detector. Real
-MegaDetector weights land at chunk 14 and real species labels at chunk 17.
+**`classify` works end to end.** It walks the card read-only, decodes every JPEG/PNG/TIFF/HEIC,
+measures sharpness, applies the dominance rule and files each photo into
+`<output>/<label>/` by copy, `--link` or `--hardlink`, recording everything in a SQLite
+catalog. Re-running is a cheap no-op. `--dry-run` writes nothing.
+
+**Two things are missing, and both are load-bearing:**
+
+- **No detector runs on real photographs.** `--detector megadetector` exits 3 rather than
+  pretending; only `--detector scripted` works today, and it reads boxes from a
+  `<image>.boxes.json` sidecar. Without it every photo is filed as `landscape` or `junk`,
+  so the tool cannot find animals on your card yet. Real MegaDetector v5a lands at chunk 14.
+- **No species model exists.** Every detected animal is therefore filed as `unknown`, never as
+  `lion` or `plains_zebra`. The dominance rule itself is fully working and tested — a single
+  dominant animal lands in `unknown/`, a crowded frame in `multiple/` — it just has no names to
+  attach. Species labels land at chunk 17.
+
+`gui`, `train`, `eval`, `export-trainset` and `verify` are still placeholders that print
+`not implemented yet` and exit 1.
 
 ## Setup
 
@@ -33,13 +45,26 @@ Run everything through `uv run`, which resolves the console script without activ
 anything:
 
 ```bash
-uv run animal-classifier classify /Volumes/SDCARD --output ~/animal_pics [--link]
+uv run animal-classifier classify /Volumes/SDCARD --output ~/animal_pics --detector scripted [--link]
 uv run animal-classifier gui --output ~/animal_pics
 uv run animal-classifier train <manifest>
 uv run animal-classifier eval <manifest> --model models/species.pt
 uv run animal-classifier export-trainset --output ~/animal_pics --destination trainset/
 uv run animal-classifier verify
 ```
+
+### Labels
+
+Each photo is filed under exactly one label: a species, or one of `multiple`, `landscape`,
+`junk`, `unknown`. Nothing is ever discarded.
+
+> Images containing only people or vehicles are filed as `landscape` (or `junk` if blurry);
+> their person/vehicle boxes are still kept in the catalog and drawn in the GUI.
+
+There is **no minimum box size.** The only size comparison in the pipeline is
+`--dominance-ratio` (default 1.6), and it is relative: a lone animal is filed as its species
+however small it is in frame, and a distant impala beside a lion portrait leaves the photo
+filed as the lion.
 
 `uv sync` does install the script at `.venv/bin/animal-classifier`, so if you would rather
 type the bare command, activate the venv first — otherwise your shell will not find it:

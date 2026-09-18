@@ -1,8 +1,8 @@
 {
   "complete": false,
   "total_items": 26,
-  "done_items": 6,
-  "current_chunk": "7. detect/base.py + detect/scripted.py: the detector protocol and the shipped test detector",
+  "done_items": 9,
+  "current_chunk": "10. Idempotency, resume, --limit, --reclassify, failed retry — DEFECT 1's regression test",
   "plan_file": "docs/IMPL-PLAN.md",
   "spec_of_record": "docs/DESIGN.md",
   "branch": "feat/safari-classifier",
@@ -15,5 +15,5 @@
     "F_gui": "chunks 20-22",
     "G_loop_closers_polish": "chunks 23-26"
   },
-  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk. As of chunk 6 the suite is still green (7 passed, exit 0 — the CLI-surface tests) and images.py exists: open_source() is the only source reader ('rb'), decode() establishes the single EXIF-transposed frame (I9), sha256 streams raw bytes in 1 MiB chunks, measure_blur() downscales only (ref_edge persisted), and crop() marks a sub-2px box degenerate while still returning it so dominance_ratio stays the only size gate. Verified by scripts/probe_images.py: 48 checks, 0 failures, including 28 real COCO val2017 photographs and all 7 of its non-crowd sub-2px animal boxes. Chunk 7 (detect/base.py + detect/scripted.py) is next; chunk 9 is where scan.py and images.py first get executable e2e coverage (E2/E5/E6/E26), chunk 12's E11/E16 cover blur and every skip reason, and chunk 20's E18 pins the orientation-6 leg end to end."
+  "notes": "complete=true only when every one of the 26 checklist items in docs/IMPL-PLAN.md is checked AND `uv run --frozen pytest tests/e2e -q` is green over E1-E26 with real captured output. Update done_items and current_chunk after each chunk. As of chunk 9 `classify` runs end to end for the first time: scan -> hash -> decode/blur -> detect -> crop -> decide -> materialize -> catalog, and the suite is 33 passed / exit 0 (was 7). chunk 7 added detect/ (Detector protocol, frozen Box in the EXIF-transposed frame, box_from_pixels' total validation, ScriptedDetector reading <image>.boxes.json); chunk 8 added decide.py (the SS5.7 rule verbatim, the only size comparison in the tree) and materialize.py (temp-in-destination-dir + os.replace for all three modes, SS5.8 collision rules, .ac-tmp-* sweep, EXDEV as exit 3, --dry-run writing nothing at all); chunk 9 added pipeline.py (two bounded threaded stages, hashing ahead of decoding so a re-run is cheap, one catalog transaction per image) plus the real classify command with SS8's full flag surface. Verified on a real generated card: exact output tree, exit 4 from one truncated JPEG, a second run filing 0 and reporting 10 already done, the card byte-identical afterwards, boxes/candidates not doubling, --dry-run writing zero files, --link producing 10 symlinks, --limit 3 filing 3 and exiting 0, --link --hardlink exit 2, --detector megadetector exit 3. NOT yet done and deliberately visible: no species model is loaded, so every animal is `unknown` (config.SPECIES_INFERENCE_WIRED is the single switch that restores SS10.1's required-artifact rows when classify/own_model.py lands); --detector megadetector raises rather than running, so real photographs cannot be classified until chunk 14. Chunk 10 owns E13's idempotency/resume/--limit/--reclassify legs, chunk 12's E11/E16 cover blur and every skip reason, chunk 14 brings the real detector."
 }

@@ -145,6 +145,22 @@ DETECTOR_WEIGHTS_URL: Final = (
     "https://github.com/agentmorris/MegaDetector/releases/download/v5.0/md_v5a.0.0.pt"
 )
 
+#: Whether ``classify`` actually loads the species and bird artifacts yet.
+#:
+#: §10.1 makes a missing ``species_model``/``bird_model`` a fatal exit 3 for
+#: ``classify``, and that is right the moment those artifacts are *used*. Until
+#: species inference is wired the pipeline runs a pass-through classifier — every
+#: animal box reaches §5.7 with no prediction and is answered ``unknown`` — so
+#: demanding the artifacts up front would refuse to run over an asset nothing
+#: opens, and would be satisfied by an empty file anyway, since this check tests
+#: existence and readability rather than contents.
+#:
+#: Flip to ``True`` in the same step that lands ``classify/own_model.py``; that
+#: single edit restores §10.1's row, and E22 (fail-loud config) is where the
+#: restored behaviour must be asserted. Deliberately a named constant rather than a
+#: commented-out block so the gap is greppable and has exactly one switch.
+SPECIES_INFERENCE_WIRED: Final = False
+
 
 def config_search_paths() -> tuple[Path, ...]:
     """Default TOML locations, in order. An absent default path is normal."""
@@ -778,13 +794,14 @@ def _validate_required_assets(config: Config) -> None:
                     f"Download MegaDetector v5a from {DETECTOR_WEIGHTS_URL}",
                 )
             )
-        required.append(
-            ("species_model", config.species_model, TRAIN_HINT_SPECIES.format(path=config.species_model))
-        )
-        if not config.force_bird_head or config.bird_provider is BirdProvider.OWN_BIRD_HEAD:
+        if SPECIES_INFERENCE_WIRED:
             required.append(
-                ("bird_model", config.bird_model, TRAIN_HINT_BIRDS.format(path=config.bird_model))
+                ("species_model", config.species_model, TRAIN_HINT_SPECIES.format(path=config.species_model))
             )
+            if not config.force_bird_head or config.bird_provider is BirdProvider.OWN_BIRD_HEAD:
+                required.append(
+                    ("bird_model", config.bird_model, TRAIN_HINT_BIRDS.format(path=config.bird_model))
+                )
     for key, path, remedy in required:
         if not path.exists():
             raise AssetError(f"{key} not found at {path}. Produce it with:\n  {remedy}")

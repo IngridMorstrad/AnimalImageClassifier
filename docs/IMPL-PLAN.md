@@ -161,7 +161,7 @@ no GUI yet.
       Verify: covered by chunk 12 (E11 blur legs) and chunk 20 (E18 orientation-6 leg); interim gate
       is a clean import and a green `uv run --frozen pytest tests/e2e -q`.
 
-- [ ] 7. **`detect/base.py` + `detect/scripted.py`: the detector protocol and the shipped test
+- [x] 7. **`detect/base.py` + `detect/scripted.py`: the detector protocol and the shipped test
       detector.** `base.py` defines the `Detector` protocol and the frozen `Box(cls, conf, x0, y0,
       x1, y1, area_frac)` dataclass in the transposed frame. `scripted.py` reads a
       `<image>.boxes.json` sidecar and returns exactly those boxes — a *shipped* implementation
@@ -170,7 +170,7 @@ no GUI yet.
       `.../detect/base.py`, `.../detect/scripted.py`
       Verify: exercised by chunk 9's E5/E6/E26; interim gate is a clean import and green collection.
 
-- [ ] 8. **`decide.py` + `materialize.py`: the dominance rule and atomic filing.** `decide.py` is the
+- [x] 8. **`decide.py` + `materialize.py`: the dominance rule and atomic filing.** `decide.py` is the
       §5.7 function verbatim: `species_or_unknown` total (degenerate or `None` conf or below
       `min_species_confidence` → `unknown`), no animals → `junk` if `blur_score < blur_threshold`
       else `landscape`, one animal → species-or-unknown, ≥ 2 animals → `animals[0].area_frac >=
@@ -189,7 +189,7 @@ no GUI yet.
       Verify: covered by chunk 9 (E2/E5/E6/E26), chunk 11 (E1/E3/E14/E15); interim gate is green
       collection.
 
-- [ ] 9. **Fixture builder + `classify` wired end-to-end → the first green e2e run.** Write
+- [x] 9. **Fixture builder + `classify` wired end-to-end → the first green e2e run.** Write
       `scripts/make_e2e_fixtures.py`, which builds the fixture SD-card tree from the archives in
       `/projects/sandbox/AnimalImageClassifier/data/raw` (session-scoped cache under
       `tests/e2e/_fixtures/`, gitignored) and **fails with the exact download commands** if

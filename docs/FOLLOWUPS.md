@@ -297,3 +297,49 @@ observations only.
       but the two passes could share one read when the decode worker lands in chunk 9/10.
       Mentioned because SD card throughput, not inference, will dominate a real card's
       wall-clock time.
+
+
+## From chunks 7-9 (`detect/`, `decide.py`, `materialize.py`, `pipeline.py`, `cli.py`, 2026-09-18)
+
+Three decisions in this work go **beyond** the literal spec, and one gap is opened deliberately.
+All four are recorded here rather than left in a docstring, because each one is a place a later
+reader could reasonably think the code disagrees with `DESIGN.md`.
+
+- [ ] **F27 — `classify` no longer requires the species/bird artifacts, behind one named switch**
+      (medium — close it in the step that lands `classify/own_model.py`). §10.1 makes a missing
+      `species_model`/`bird_model` a fatal exit 3 for `classify`, and `_validate_required_assets`
+      enforced exactly that. With a pass-through classifier there is nothing to load, so the check
+      refused to run over an artifact the run never opens — and it would have been satisfied by an
+      empty file anyway, since it tests existence and readability, not contents. It is now gated on
+      `config.SPECIES_INFERENCE_WIRED` (a `Final = False` with the reasoning beside it). Flipping
+      that one constant to `True` restores §10.1's rows. **E22 (chunk 13) lands before the flip and
+      must not assert the current, relaxed behaviour as if it were the contract** — either assert
+      the flag's two states, or sequence E22's species-artifact leg after chunk 17.
+
+- [ ] **F28 — copy/hardlink mode over a destination left by a previous `--link` run replaces it**
+      (low, beyond spec). §5.8's collision rules assume one mode throughout, so they say nothing
+      about a symlink sitting where a copy is about to go. `resolve_destination` replaces it
+      atomically and counts it `relinked`, without ever dereferencing it (the target may be on an
+      unplugged card). The alternative readings are worse: hashing it would raise on exactly the
+      dangling case §5.8 protects elsewhere, and giving it a hash-suffixed name would leave the card
+      filed twice under one label. Recorded so chunk 11's E14/E15 mode-switch legs pin the chosen
+      behaviour rather than rediscovering it.
+
+- [ ] **F29 — the scripted detector's own sidecars are counted as `unsupported_extension` skips**
+      (nit, cosmetic). A fixture card carries one `.boxes.json` per scripted image, and `scan.py`
+      correctly judges each as `unsupported_extension` (benign, exit 0), so a 10-image fixture card
+      reports 8 skips that are really test scaffolding. Honest but noisy: it makes `n_skipped` in
+      E2's captured output look alarming. Options are to teach `scan.py` about `SIDECAR_SUFFIX`
+      (couples the scanner to a test affordance — probably wrong) or to keep the sidecars outside
+      the card root and pass their directory to `ScriptedDetector` (cleaner; needs a flag). No
+      behaviour is wrong today, which is why this is a nit.
+
+- [ ] **F30 — `pipeline.py` nests two bounded maps over one thread pool** (low, worth a second
+      opinion before chunk 14's real inference lands). Hashing (stage 1) and decode+blur (stage 2)
+      are both `_bounded_map` calls sharing one `ThreadPoolExecutor`, with stage 2 consuming a
+      generator that drives stage 1. There is no circular wait — stage-2 tasks never block on
+      stage-1 tasks — so it cannot deadlock, but the two stages do compete for the same `jobs`
+      workers, so the effective parallelism of each is less than `jobs`. Once MegaDetector occupies
+      the main thread for ~2 s per image (§9's budget), the right shape may be one pool per stage,
+      or a single fused stage now that a re-run's cheapness is already protected by hashing first.
+      Measure before changing it.

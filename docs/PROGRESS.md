@@ -1533,3 +1533,82 @@ file is read twice, once to hash and once to decode.
 **Next:** unchanged — chunk 7 (`detect/base.py` + `detect/scripted.py`). F22's `ValueError` is the
 contract `detect/base.py`'s `Box` should state explicitly: finite pixel coordinates in the
 transposed frame.
+
+
+## 2026-09-18 — chunks 7-9: `classify` runs end to end for the first time
+
+Three plan chunks in one step, because none of them is observable alone: a detector with nothing
+to decide for, a decision with nothing to file, and a pipeline with neither. Together they turn
+`classify` from a stub that printed `not implemented yet` into a command that walks a card and
+files every photo. The e2e suite goes from **7 passed to 33 passed**, and for the first time the
+tests assert *behaviour* rather than the shape of `--help`.
+
+**Chunk 7 — `detect/`.** `base.py` defines the `Detector` protocol (`model_id` + `detect`) and the
+frozen `Box(cls, conf, x0, y0, x1, y1, area_frac)` in the EXIF-transposed frame. `box_from_pixels`
+takes the frame size as a *required* argument, because `area_frac` normalised against the
+pre-transpose raster would corrupt every dominance decision while leaving the catalog looking
+plausible. Its validation is total and fatal rather than clamping: the class must be one of §5.4's
+three, confidence a finite `[0, 1]`, coordinates finite and ordered. The non-finite check is F22's
+contract stated one layer earlier, where a malfunctioning backend is caught before its numbers reach
+§5.7. `scripted.py` reads `<image>.boxes.json` — an **absent** sidecar means no detections (that is
+how the animal-free fixtures are expressed), while a sidecar that exists but is malformed is fatal
+exit 3, so a typo'd fixture cannot quietly become "no animals here" and let a dominance test pass
+for the wrong reason.
+
+**Chunk 8 — `decide.py` and `materialize.py`.** `decide.py` is §5.7 transcribed and is the only
+place in the tree that compares one box's size with another's; `dominance_ratio` appears once and
+`area_frac` is never compared with a constant, so invariant I2 is verifiable by eye. The three
+details that look like details: multiplication not division (a zero-area runner-up makes the leader
+dominant instead of raising), `>=` not `>` (an exact 1.6 tie is dominance), and a low-confidence
+winner is `unknown` not `multiple` (the dominance question was answered; only the identity is
+uncertain). `materialize.py` implements all three modes as temp-in-the-destination-directory +
+`os.replace`, which is what makes the rename atomic rather than a copy that can be interrupted. Its
+no-write rule is structural: nothing opens a materialized file for writing, and the only operations
+on an existing destination are `os.replace` and `os.unlink` — which is what makes I1 true in
+`--hardlink` mode, where a destination *is* the card's inode. Link mode compares `os.readlink`
+against the intended source and never dereferences, because the common case is a card that has since
+been unplugged.
+
+**Chunk 9 — `pipeline.py` and the real `classify`.** Two threaded stages, each bounded to `2 * jobs`
+in flight, because `Executor.map` over a lazy scan would submit every file on a 64 GB card before the
+first result returned. Hashing is a stage of its own *ahead of* decoding, and that ordering is the
+second-run-is-cheap invariant: `sha256` is all `plan_disposition` needs, so a fully-filed card is
+re-walked without paying decode cost. `--limit` is decremented only when an image is actually
+accepted, and `done` rows are skipped before the budget is consulted. `cli.py` gains §8's full flag
+surface, with the two hand-rolled parts spelled out: `--link`/`--hardlink` exclusion via
+`typer.BadParameter` (exit 2) and `--formats` replacing rather than extending the configured list.
+Every option defaults to `None` and unset flags are dropped before `Config.resolve`, so an
+unspecified flag cannot mask a TOML file.
+
+**Verified on a real generated card** (`scripts/make_e2e_fixtures.py`, 10 images across
+JPEG/PNG/TIFF/HEIC plus an `.mp4` and a truncated JPEG):
+
+1. Exact output tree, all ten images where the rule says they belong — `unknown/` for the five
+   dominance winners, `multiple/` for the 1.59-ratio and equal-area pairs, `landscape/` for the sharp
+   animal-free photo and the person-only HEIC, `junk/` for the blurred one. Blur separated them by
+   three orders of magnitude (`0.8` vs `5560.3` at `ref_edge=512`).
+2. **Exit 4**, from the one truncated JPEG (`decode_error`, abnormal). The benign skips — one `video`,
+   eight `unsupported_extension` sidecars — do not set the exit class, and `--limit 3`, whose walk
+   contained only benign skips, exited **0**. That is F15's resolution, now asserted by a test
+   instead of living in a docstring.
+3. **A second run filed 0 and reported 10 already done**, with `boxes` still at 13 rather than 26 and
+   `first_seen` unchanged — DEFECT 1's invariant holding from both the `skipped` upsert and F1's
+   `refresh_state` opt-in. Chunk 10 still owns E13's full form.
+4. **The card was byte- and hash-identical afterwards** across all 20 files (I1).
+5. `--dry-run` wrote **zero** files and created no label directories, recording `planned=10`; `--link`
+   produced 10 symlinks; `--link --hardlink` exited **2**; `--detector megadetector` exited **3**
+   naming the checkpoint and its download URL; a missing `SOURCE` exited **3**.
+6. E26's degenerate box: `species_status='degenerate'`, `is_dominant=1`, label `unknown`,
+   `confidence` NULL, and the photo still on disk under `unknown/` — kept, not discarded.
+
+**Not done, and deliberately loud about it.** `--detector megadetector` *raises* rather than running,
+because a silent fallback to a detector that finds nothing would file an entire safari card as
+`landscape` and look like it worked. And with no species model, every animal is `unknown` rather than
+`lion` — the dominance rule is fully exercised (dominant → `unknown/`, crowded → `multiple/`), it
+simply has no names to attach yet. `config.SPECIES_INFERENCE_WIRED` is the single switch that
+restores §10.1's required-artifact rows when `classify/own_model.py` lands; see F27, which also warns
+that E22 at chunk 13 must not bake in the relaxed behaviour. F28-F30 record the two other
+beyond-spec decisions and the one shape worth re-measuring.
+
+**Next:** chunk 10 — E13's idempotency, resume, `--limit`, `--reclassify` and `failed`-retry legs as
+one test file, including the `.cr2`-then-`--raw` case. Chunk 14 is what a real safari card needs.
