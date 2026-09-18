@@ -1,0 +1,372 @@
+{
+  "threshold_high": 3.0,
+  "threshold_low": 1.3,
+  "high": [
+    {
+      "image_id": 46378,
+      "file_name": "000000046378.jpg",
+      "gt_ratio": 4.895620824464133,
+      "top_class": "cat",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 65288,
+      "file_name": "000000065288.jpg",
+      "gt_ratio": 3.317066098828101,
+      "top_class": "bird",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 66561,
+      "file_name": "000000066561.jpg",
+      "gt_ratio": 3.391618672740432,
+      "top_class": "sheep",
+      "second_class": "sheep"
+    },
+    {
+      "image_id": 79229,
+      "file_name": "000000079229.jpg",
+      "gt_ratio": 6.7489992659561855,
+      "top_class": "horse",
+      "second_class": "dog"
+    },
+    {
+      "image_id": 101780,
+      "file_name": "000000101780.jpg",
+      "gt_ratio": 3.900258556160449,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 124636,
+      "file_name": "000000124636.jpg",
+      "gt_ratio": 4.037683462343447,
+      "top_class": "cow",
+      "second_class": "cow"
+    },
+    {
+      "image_id": 132796,
+      "file_name": "000000132796.jpg",
+      "gt_ratio": 8.417069237785618,
+      "top_class": "elephant",
+      "second_class": "elephant"
+    },
+    {
+      "image_id": 183437,
+      "file_name": "000000183437.jpg",
+      "gt_ratio": 30.778190239199244,
+      "top_class": "elephant",
+      "second_class": "elephant"
+    },
+    {
+      "image_id": 219578,
+      "file_name": "000000219578.jpg",
+      "gt_ratio": 3.7777415235774923,
+      "top_class": "dog",
+      "second_class": "cat"
+    },
+    {
+      "image_id": 221281,
+      "file_name": "000000221281.jpg",
+      "gt_ratio": 3.1650190106866716,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 222235,
+      "file_name": "000000222235.jpg",
+      "gt_ratio": 12.977305511586135,
+      "top_class": "cat",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 245513,
+      "file_name": "000000245513.jpg",
+      "gt_ratio": 14.734079437278712,
+      "top_class": "giraffe",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 250758,
+      "file_name": "000000250758.jpg",
+      "gt_ratio": 23.20966295205174,
+      "top_class": "zebra",
+      "second_class": "zebra"
+    },
+    {
+      "image_id": 260106,
+      "file_name": "000000260106.jpg",
+      "gt_ratio": 13.171850789590174,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 287545,
+      "file_name": "000000287545.jpg",
+      "gt_ratio": 7.704796820203993,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 289393,
+      "file_name": "000000289393.jpg",
+      "gt_ratio": 3.4203147877833384,
+      "top_class": "cow",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 318238,
+      "file_name": "000000318238.jpg",
+      "gt_ratio": 3.1048702872387537,
+      "top_class": "dog",
+      "second_class": "dog"
+    },
+    {
+      "image_id": 325306,
+      "file_name": "000000325306.jpg",
+      "gt_ratio": 16.35056112484254,
+      "top_class": "zebra",
+      "second_class": "zebra"
+    },
+    {
+      "image_id": 356261,
+      "file_name": "000000356261.jpg",
+      "gt_ratio": 28.916487232016323,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 376278,
+      "file_name": "000000376278.jpg",
+      "gt_ratio": 7.6614778387423295,
+      "top_class": "zebra",
+      "second_class": "zebra"
+    },
+    {
+      "image_id": 454798,
+      "file_name": "000000454798.jpg",
+      "gt_ratio": 73.4193327747449,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 473015,
+      "file_name": "000000473015.jpg",
+      "gt_ratio": 3.189168899736019,
+      "top_class": "bird",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 492992,
+      "file_name": "000000492992.jpg",
+      "gt_ratio": 16.656501352429387,
+      "top_class": "cow",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 505565,
+      "file_name": "000000505565.jpg",
+      "gt_ratio": 4.734529144293724,
+      "top_class": "bird",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 507975,
+      "file_name": "000000507975.jpg",
+      "gt_ratio": 3.1182316516276787,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 509735,
+      "file_name": "000000509735.jpg",
+      "gt_ratio": 3.0743560395327596,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 535578,
+      "file_name": "000000535578.jpg",
+      "gt_ratio": 3.7645830909005715,
+      "top_class": "sheep",
+      "second_class": "sheep"
+    }
+  ],
+  "low": [
+    {
+      "image_id": 17178,
+      "file_name": "000000017178.jpg",
+      "gt_ratio": 1.2958687509607272,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 28449,
+      "file_name": "000000028449.jpg",
+      "gt_ratio": 1.0169354317922397,
+      "top_class": "elephant",
+      "second_class": "elephant"
+    },
+    {
+      "image_id": 52462,
+      "file_name": "000000052462.jpg",
+      "gt_ratio": 1.2515714002595455,
+      "top_class": "zebra",
+      "second_class": "zebra"
+    },
+    {
+      "image_id": 79144,
+      "file_name": "000000079144.jpg",
+      "gt_ratio": 1.07135149578322,
+      "top_class": "bear",
+      "second_class": "bear"
+    },
+    {
+      "image_id": 80659,
+      "file_name": "000000080659.jpg",
+      "gt_ratio": 1.0159784757698087,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 89880,
+      "file_name": "000000089880.jpg",
+      "gt_ratio": 1.0219680763235415,
+      "top_class": "dog",
+      "second_class": "dog"
+    },
+    {
+      "image_id": 103548,
+      "file_name": "000000103548.jpg",
+      "gt_ratio": 1.0920794020579356,
+      "top_class": "sheep",
+      "second_class": "sheep"
+    },
+    {
+      "image_id": 147498,
+      "file_name": "000000147498.jpg",
+      "gt_ratio": 1.212107555329291,
+      "top_class": "bird",
+      "second_class": "bird"
+    },
+    {
+      "image_id": 152740,
+      "file_name": "000000152740.jpg",
+      "gt_ratio": 1.1364268751918547,
+      "top_class": "cow",
+      "second_class": "cow"
+    },
+    {
+      "image_id": 235252,
+      "file_name": "000000235252.jpg",
+      "gt_ratio": 1.19161252359396,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 242724,
+      "file_name": "000000242724.jpg",
+      "gt_ratio": 1.2018755830174115,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 245915,
+      "file_name": "000000245915.jpg",
+      "gt_ratio": 1.097095463477692,
+      "top_class": "elephant",
+      "second_class": "elephant"
+    },
+    {
+      "image_id": 262938,
+      "file_name": "000000262938.jpg",
+      "gt_ratio": 1.049500835760766,
+      "top_class": "dog",
+      "second_class": "dog"
+    },
+    {
+      "image_id": 269196,
+      "file_name": "000000269196.jpg",
+      "gt_ratio": 1.1788252393896177,
+      "top_class": "sheep",
+      "second_class": "sheep"
+    },
+    {
+      "image_id": 306582,
+      "file_name": "000000306582.jpg",
+      "gt_ratio": 1.1639585536874464,
+      "top_class": "cow",
+      "second_class": "cow"
+    },
+    {
+      "image_id": 314034,
+      "file_name": "000000314034.jpg",
+      "gt_ratio": 1.0293323840071713,
+      "top_class": "cow",
+      "second_class": "cow"
+    },
+    {
+      "image_id": 332901,
+      "file_name": "000000332901.jpg",
+      "gt_ratio": 1.2889100874556971,
+      "top_class": "sheep",
+      "second_class": "sheep"
+    },
+    {
+      "image_id": 375278,
+      "file_name": "000000375278.jpg",
+      "gt_ratio": 1.1078308598929154,
+      "top_class": "cat",
+      "second_class": "dog"
+    },
+    {
+      "image_id": 394611,
+      "file_name": "000000394611.jpg",
+      "gt_ratio": 1.1894206312577875,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 433243,
+      "file_name": "000000433243.jpg",
+      "gt_ratio": 1.0511895148726695,
+      "top_class": "giraffe",
+      "second_class": "zebra"
+    },
+    {
+      "image_id": 450758,
+      "file_name": "000000450758.jpg",
+      "gt_ratio": 1.2987238851210419,
+      "top_class": "giraffe",
+      "second_class": "giraffe"
+    },
+    {
+      "image_id": 514979,
+      "file_name": "000000514979.jpg",
+      "gt_ratio": 1.2987961085578403,
+      "top_class": "elephant",
+      "second_class": "elephant"
+    },
+    {
+      "image_id": 545730,
+      "file_name": "000000545730.jpg",
+      "gt_ratio": 1.059627877851018,
+      "top_class": "zebra",
+      "second_class": "zebra"
+    },
+    {
+      "image_id": 547886,
+      "file_name": "000000547886.jpg",
+      "gt_ratio": 1.1743779083674926,
+      "top_class": "horse",
+      "second_class": "horse"
+    },
+    {
+      "image_id": 555705,
+      "file_name": "000000555705.jpg",
+      "gt_ratio": 1.0898266548770794,
+      "top_class": "cat",
+      "second_class": "cat"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "min_area_frac": 0.1,
+  "images": [
+    {
+      "image_id": 46804,
+      "file_name": "000000046804.jpg",
+      "label": "sheep",
+      "area_frac": 0.1559463924153646
+    },
+    {
+      "image_id": 52565,
+      "file_name": "000000052565.jpg",
+      "label": "cow",
+      "area_frac": 0.12444103455922496
+    },
+    {
+      "image_id": 55072,
+      "file_name": "000000055072.jpg",
+      "label": "giraffe",
+      "area_frac": 0.17337104306937925
+    },
+    {
+      "image_id": 105264,
+      "file_name": "000000105264.jpg",
+      "label": "cow",
+      "area_frac": 0.13627215840895787
+    },
+    {
+      "image_id": 155571,
+      "file_name": "000000155571.jpg",
+      "label": "elephant",
+      "area_frac": 0.40560473769713784
+    },
+    {
+      "image_id": 176634,
+      "file_name": "000000176634.jpg",
+      "label": "zebra",
+      "area_frac": 0.5153114121093749
+    },
+    {
+      "image_id": 236730,
+      "file_name": "000000236730.jpg",
+      "label": "zebra",
+      "area_frac": 0.5166866507161458
+    },
+    {
+      "image_id": 289659,
+      "file_name": "000000289659.jpg",
+      "label": "giraffe",
+      "area_frac": 0.10012553807218308
+    },
+    {
+      "image_id": 298738,
+      "file_name": "000000298738.jpg",
+      "label": "bear",
+      "area_frac": 0.41886430071721314
+    },
+    {
+      "image_id": 311392,
+      "file_name": "000000311392.jpg",
+      "label": "cow",
+      "area_frac": 0.481036303242096
+    },
+    {
+      "image_id": 321887,
+      "file_name": "000000321887.jpg",
+      "label": "sheep",
+      "area_frac": 0.45505345961084914
+    },
+    {
+      "image_id": 334555,
+      "file_name": "000000334555.jpg",
+      "label": "cow",
+      "area_frac": 0.16910774226085692
+    },
+    {
+      "image_id": 337987,
+      "file_name": "000000337987.jpg",
+      "label": "bird",
+      "area_frac": 0.19690154020182293
+    },
+    {
+      "image_id": 341094,
+      "file_name": "000000341094.jpg",
+      "label": "bear",
+      "area_frac": 0.1654879458666667
+    },
+    {
+      "image_id": 420230,
+      "file_name": "000000420230.jpg",
+      "label": "elephant",
+      "area_frac": 0.5856507613070844
+    },
+    {
+      "image_id": 445439,
+      "file_name": "000000445439.jpg",
+      "label": "zebra",
+      "area_frac": 0.4734691525735295
+    },
+    {
+      "image_id": 482477,
+      "file_name": "000000482477.jpg",
+      "label": "bird",
+      "area_frac": 0.1673041531694614
+    },
+    {
+      "image_id": 521231,
+      "file_name": "000000521231.jpg",
+      "label": "bear",
+      "area_frac": 0.19203161851415101
+    },
+    {
+      "image_id": 525155,
+      "file_name": "000000525155.jpg",
+      "label": "sheep",
+      "area_frac": 0.20257934529049296
+    },
+    {
+      "image_id": 547519,
+      "file_name": "000000547519.jpg",
+      "label": "bear",
+      "area_frac": 0.16022961525735294
+    }
+  ]
+}
