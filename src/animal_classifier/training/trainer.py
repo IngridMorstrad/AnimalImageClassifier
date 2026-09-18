@@ -221,8 +221,24 @@ def _load_backbone(model, weights: Path) -> None:
     state = torch.load(weights, map_location="cpu", weights_only=False)
     if isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
-    model.load_state_dict(state, strict=False)  # head shape differs; strict=False by design
-    log.info("loaded backbone weights from %s", weights)
+    # Drop the pretrained classifier head: it has the source task's class count
+    # (e.g. ImageNet's 1000), and a shape-mismatched tensor makes even
+    # strict=False raise. We only want the backbone features; the fresh head is
+    # trained from scratch. Any key whose shape does not match ours is dropped.
+    own = model.state_dict()
+    compatible = {
+        k: v
+        for k, v in state.items()
+        if k in own and own[k].shape == v.shape
+    }
+    dropped = [k for k in state if k not in compatible]
+    model.load_state_dict(compatible, strict=False)
+    log.info(
+        "loaded %d backbone tensors from %s (dropped %d incompatible, incl. the head)",
+        len(compatible),
+        weights,
+        len(dropped),
+    )
 
 
 def _maybe_resume(resume, checkpoint_path, model, arch, manifest_id):

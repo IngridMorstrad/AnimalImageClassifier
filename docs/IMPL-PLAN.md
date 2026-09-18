@@ -343,7 +343,7 @@ no GUI yet.
       classes, 500 train / 100 val) → `eval` → `classify` completes the full train→eval→export→infer
       path with `val_top1 >= 0.90` in **< 90 s wall clock**; paste the timing.
 
-- [ ] 16. **Real transfer learning on real COCO crops (E7).** `scripts/build_coco_manifest.py` reads
+- [x] 16. **Real transfer learning on real COCO crops (E7).** `scripts/build_coco_manifest.py` reads
       `data/raw/annotations/instances_val2017.json`, takes categories 16–25, drops the 34 `iscrowd=1`
       instances, converts `bbox` to `x0,y0,x1,y1`, honours `--classes`, and **filters training
       manifests to `split == "train"`** (the §7.2 leakage rule). `training/trainer.py` implements the
