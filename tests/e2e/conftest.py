@@ -175,3 +175,39 @@ def classified(run_cli, fixture_card: Path, tmp_path_factory) -> ClassifyRun:
         stdout=result.stdout,
         stderr=result.stderr,
     )
+
+
+
+# --------------------------------------------------------------------------- #
+# Small purpose-built cards for the idempotency and format legs
+# --------------------------------------------------------------------------- #
+
+
+def _write_animal(directory: Path, name: str, *, seed: int) -> None:
+    """A sharp JPEG with one dominant animal box beside it (scripted detector)."""
+    import json  # noqa: PLC0415
+
+    make_e2e_fixtures.noisy(make_e2e_fixtures.FRAME, seed).save(directory / name, quality=95)
+    (directory / (name + ".boxes.json")).write_text(
+        json.dumps([{"cls": "animal", "conf": 0.9, "x0": 100, "y0": 100, "x1": 500, "y1": 450}]),
+        encoding="utf-8",
+    )
+
+
+@pytest.fixture
+def five_image_card(tmp_path_factory) -> Path:
+    """A card of exactly five classifiable images — for the ``--limit`` legs."""
+    card = tmp_path_factory.mktemp("card5") / "DCIM"
+    card.mkdir()
+    for i in range(5):
+        _write_animal(card, f"img_{i}.jpg", seed=100 + i)
+    return card.parent
+
+
+@pytest.fixture
+def cr2_card(tmp_path_factory) -> Path:
+    """A card holding one ``.cr2`` — skipped without ``--raw`` (§5.1)."""
+    card = tmp_path_factory.mktemp("cardraw") / "DCIM"
+    card.mkdir()
+    (card / "IMG_0001.cr2").write_bytes(b"not-a-real-raw-file-but-has-the-extension")
+    return card.parent

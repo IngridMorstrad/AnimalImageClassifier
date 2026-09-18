@@ -220,7 +220,7 @@ no GUI yet.
       and `classify --help` exposing no `min_box_area`-like option; E26 label `unknown`,
       `species_status='degenerate'`, file under `unknown/`, exit 0.
 
-- [ ] 10. **Idempotency, resume, `--limit`, `--reclassify`, `failed` retry — DEFECT 1's regression
+- [x] 10. **Idempotency, resume, `--limit`, `--reclassify`, `failed` retry — DEFECT 1's regression
       test.** Implement/verify the §5.9 bookkeeping in the pipeline and write E13 as one file with
       all legs: `classify` twice over the same fixture tree (**the second run must succeed and be a
       clean no-op** — this is DEFECT 1's regression gate, with a card containing an `.mp4` so the
