@@ -1671,3 +1671,70 @@ argument for the e2e-only discipline. Each is fixed with the invariant it protec
 **Honestly scoped, not faked:** E7's accuracy gate needs the full COCO stage (documented); shipped
 `.acmodel`s are produced on the user's machine. Everything asserted here ran for real on the locked
 environment.
+
+
+## 2026-09-19 — follow-up pass: every §11.2 gap closed, on real data
+
+The build was marked complete, then audited against §11.2's expectation list line by line. That audit
+found real gaps — including two scripts `docs/ARTIFACTS.md` told users to run that **did not exist**.
+All closed. Suite is now **150 passed (127 fast + 23 slow), 0 failed, 0 xfail**; `ruff check` clean
+across `src`, `scripts` *and* `tests`.
+
+**The documentation lie, fixed first.** `scripts/build_cub_manifest.py` and
+`scripts/build_coco_dominance.py` were referenced in ARTIFACTS.md and the plan but never written. Both
+are real now — the CUB builder strips the `NNN.` directory prefix (DEFECT 2) and honours the official
+`train_test_split.txt`; the dominance builder freezes §11.1's expectation lists from
+`instances_val2017.json`, val-bucket only, `iscrowd` dropped.
+
+**E4 — dominance on real photographs.** 250 MB of COCO annotations staged, lists frozen and committed:
+`high` = 27 images (GT ratio > 3.0), `low` = 25 (< 1.3). Real MegaDetector v5a over all 52:
+**26/27** lopsided images avoided `multiple` (needed ≥ 22), **21/25** even-ratio images came out
+`multiple` (needed ≥ 20). Thresholds and lengths are read from the JSON — no numeric literal in the
+test — which is what keeps §11.2's re-freeze remedy available.
+
+**E7 — the real accuracy gates, not just the plumbing.** 788 MB of COCO val2017 images plus the
+timm-native backbone staged. `build_coco_manifest` produced **1,625 train / 349 val** crops (exactly
+§11.2's numbers), a real `efficientnet_b0` finetune at `--input-size 128` reached
+**`val_top1 = 0.797`** against the **≥ 0.55** gate, and the frozen 20 single-animal photos came back
+**18/20** correct through the real CLI against a **≥ 16** gate. The two misses are the documented
+failure modes: one photo where MegaDetector found only `person` boxes (→ `landscape`, §5.4 — the
+annotator saw a bear it did not), and one `bear` read as `cattle`, `bear` being the smallest class at
+60 train crops, whose per-class recall §11.2 already declines to assert.
+
+**Five more expectation tests written**: E9 (checkpoint + `--resume`, and the fatal mismatched resume),
+E12 (low-confidence → `unknown` while keeping the file, the candidates and the scored `species_conf`),
+E18's orientation-6 frame leg (invariant I9 proven through the catalog *and* the served thumbnail),
+E19's three mode legs (copy content; a **dangling** symlink moved as a symlink with `readlink`
+unchanged; a hardlink keeping its `st_ino`) plus the contention 409, E20 (the four-step override
+lifecycle), E21 (the full validation matrix, every rejection asserting the tree is byte-identical).
+
+**Three more real bugs, each caught by the test written for it:**
+
+1. **`--ignore-overrides` permanently destroyed the human decision.** The re-apply path keyed off
+   `images.label_source`, so once the flag demoted a row to `model` the override could never return —
+   exactly what §5.9 forbids. It now reads the append-only `overrides` table, the durable record.
+   E20's step 4 is the assertion.
+2. **The GUI re-tag did not fail fast.** It routed through `Catalog.do_write`, inheriting `classify`'s
+   0.5/1/2/4/8 s backoff, so a contended re-tag returned **200 after ~10 s** instead of §5.9's
+   deterministic 409. `Catalog` now takes `retry_writes`; the GUI opens with it off. That file's
+   runtime dropped 24 s → 8 s.
+3. **Both manifest builders emitted CWD-relative paths**, which `load_manifest` then resolved against
+   the manifest's own directory. Absolute now.
+
+**One design violation of my own, corrected.** My first E23 imported `rerank_by_observations`
+directly — a unit test, which §11 forbids outright. Replaced with a real `ebird_enrich` provider
+(`classify/ebird.py`: cached call, 4 s/8 s timeouts, the documented degradations, fatal 401/403) driven
+through `httpx.MockTransport` — §11.2's one sanctioned seam at that boundary. The load-bearing leg is
+the exemption: an aliased-and-observed candidate keeps its score, an aliased-but-unobserved one is
+exactly ×0.25, and a candidate with **no** alias row comes back bit-identical, proving absence from our
+table is never read as evidence about where a bird lives.
+
+**The lint gate now covers `tests/`**, and earned it immediately: the unused-variable rule caught a
+`NameError` I had just introduced while tidying an unpacked variable that was still used two lines
+later.
+
+**Recorded deviations** (all in `docs/test-report.md`): `coco_species.json` re-frozen at
+`min_area_frac = 0.10` because 0.20 yields only 9 val-bucket single-animal images where 0.10 yields
+exactly the 20 §11.1 intends; E4's measured 27/25 differ from §11.1's recorded 22/29, which is
+precisely why the design forbids hard-coded lengths; E7's `--input-size 128` is §7.3's stated budget
+trade-off against the shipped 224.
