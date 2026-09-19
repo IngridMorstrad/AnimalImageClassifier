@@ -481,15 +481,19 @@ def _process_image(
 
 
 def _human_override(catalog: Catalog, sha256: str, config: Config) -> str | None:
-    """The newest human label to keep for this hash, or ``None`` (§5.9).
+    """The newest human label to re-apply for this hash, or ``None`` (§5.9).
 
-    Returns ``None`` when overrides are ignored for this run (``--ignore-overrides``)
-    or the row was never human-labelled, so the fresh model decision stands.
+    **Read from the ``overrides`` table, never from ``images.label_source``.** That
+    distinction is the whole of ``--ignore-overrides``' contract: the flag suppresses
+    an override for one run and demotes the row to ``label_source='model'``, so a
+    later run *without* the flag must still re-apply the correction and move the file
+    back. Keying off ``label_source`` would make the demotion permanent — the flag
+    would silently destroy a human decision, which is precisely what §5.9 forbids
+    (permanent discard is done by re-tagging, which appends a *newer* override).
+
+    ``overrides`` is append-only (I6), so the newest row is the standing intent.
     """
     if config.ignore_overrides:
-        return None
-    row = catalog.image(sha256)
-    if row is None or row.label_source != str(LabelSource.HUMAN):
         return None
     override = catalog.newest_override(sha256)
     if override is None:
