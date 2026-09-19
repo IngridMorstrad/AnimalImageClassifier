@@ -26,10 +26,8 @@ import threading
 import time
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_card, classify, make_client  # noqa: E402
+from conftest_gui import build_card, classify, make_client
 
 
 def _sha(path: Path) -> str:
@@ -60,7 +58,7 @@ def test_copy_mode_retag_preserves_content(cli_path, tmp_path):
 
 def test_link_mode_retag_moves_a_dangling_symlink_as_a_symlink(cli_path, tmp_path):
     """The normal reviewing state: the card is gone, so the link dangles."""
-    import shutil  # noqa: PLC0415
+    import shutil
 
     card = build_card(tmp_path / "card")
     output = tmp_path / "pics"

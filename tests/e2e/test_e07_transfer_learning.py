@@ -44,9 +44,9 @@ COCO_SPECIES = [
 
 def _fetch(url: str, dest: Path) -> bool:
     try:
-        with urllib.request.urlopen(url, timeout=45) as response:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=45) as response:
             data = response.read()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
     if len(data) < 1000:
         return False
@@ -58,9 +58,9 @@ def _fetch(url: str, dest: Path) -> bool:
 @pytest.fixture(scope="module")
 def coco_subset(tmp_path_factory):
     """A tiny real-COCO manifest + a timm backbone. Skips if unreachable."""
-    import json  # noqa: PLC0415
+    import json
 
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     root = tmp_path_factory.mktemp("coco")
     backbone = root / "backbone.pth"
@@ -80,7 +80,7 @@ def coco_subset(tmp_path_factory):
                     {"path": str(image.resolve()), "label": label, "box": [0, 0, w, h], "split": split}
                 )
             )
-    if len({line for line in lines}) < 2:
+    if len(set(lines)) < 2:
         pytest.skip("could not fetch enough COCO images")
     manifest = root / "coco.jsonl"
     manifest.write_text("\n".join(lines) + "\n")
@@ -88,7 +88,7 @@ def coco_subset(tmp_path_factory):
 
 
 def test_efficientnet_finetune_produces_a_usable_artifact(run_cli, coco_subset, tmp_path):
-    root, manifest, backbone = coco_subset
+    _root, manifest, backbone = coco_subset
     artifact = tmp_path / "species.acmodel"
     result = run_cli(
         [
@@ -102,7 +102,7 @@ def test_efficientnet_finetune_produces_a_usable_artifact(run_cli, coco_subset, 
     assert artifact.is_file()
 
     # The identity leg (§7.1): a freshly trained artifact is loadable and uncalibrated.
-    from animal_classifier.classify.artifact import load  # noqa: PLC0415
+    from animal_classifier.classify.artifact import load
 
     loaded = load(artifact)
     assert loaded.arch == "efficientnet_b0"
@@ -112,8 +112,7 @@ def test_efficientnet_finetune_produces_a_usable_artifact(run_cli, coco_subset, 
 
 def test_trained_model_files_a_photo_as_a_species(run_cli, coco_subset, tmp_path):
     """The exported model classifies a real crop into a species dir (§5.5, E12)."""
-    import json  # noqa: PLC0415
-    from pathlib import Path as P  # noqa: PLC0415
+    import json
 
     root, manifest, backbone = coco_subset
     artifact = tmp_path / "species.acmodel"
@@ -128,7 +127,7 @@ def test_trained_model_files_a_photo_as_a_species(run_cli, coco_subset, tmp_path
     assert train.returncode == 0, train.stderr
 
     # Build a one-photo card with a whole-frame animal box.
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     card = tmp_path / "card" / "DCIM"
     card.mkdir(parents=True)

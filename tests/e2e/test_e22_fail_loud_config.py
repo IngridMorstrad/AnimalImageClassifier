@@ -181,8 +181,9 @@ def test_missing_species_model_names_the_train_command(run_cli, tmp_path):
 
 def test_absent_default_species_model_is_pass_through_not_fatal(run_cli, tmp_path):
     """A run pointing at no model is the pass-through path, not an error (F27)."""
-    from PIL import Image  # noqa: PLC0415
-    import json  # noqa: PLC0415
+    import json
+
+    from PIL import Image
 
     card = tmp_path / "card" / "DCIM"
     card.mkdir(parents=True)

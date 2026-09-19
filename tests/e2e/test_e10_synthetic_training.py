@@ -31,7 +31,7 @@ def test_train_eval_export_then_load(run_cli, tmp_path):
     assert artifact.is_file(), "train wrote the .acmodel artifact"
 
     # The artifact is loadable and honest about its calibration state (§7.1).
-    from animal_classifier.classify.artifact import load  # noqa: PLC0415
+    from animal_classifier.classify.artifact import load
 
     loaded = load(artifact)
     assert loaded.temperature == 1.0, "a freshly trained model has identity temperature"
@@ -67,7 +67,7 @@ def test_calibration_writes_a_new_artifact_never_edits(run_cli, tmp_path):
     assert calibrated.is_file()
     assert artifact.is_file(), "the original artifact is untouched"
 
-    from animal_classifier.classify.artifact import load  # noqa: PLC0415
+    from animal_classifier.classify.artifact import load
 
     original = load(artifact)
     cal = load(calibrated)

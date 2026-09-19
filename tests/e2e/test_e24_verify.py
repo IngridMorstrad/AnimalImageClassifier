@@ -18,10 +18,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_card, classify  # noqa: E402
+from conftest_gui import build_card, classify
 
 
 def test_missing_catalog_is_exit_3(run_cli, tmp_path):
@@ -94,7 +92,7 @@ def test_pending_retag_is_exit_4_then_fixed(run_cli, cli_path, tmp_path):
 
 
 def test_json_output_is_machine_readable(run_cli, cli_path, tmp_path):
-    import json  # noqa: PLC0415
+    import json
 
     card = build_card(tmp_path / "card")
     output = tmp_path / "pics"

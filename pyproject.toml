@@ -35,8 +35,11 @@ dev = ["pytest==9.1.1", "ruff==0.14.1"]
 [tool.ruff]
 # The lint gate F23 asked for: a deliberate ruleset pinned in-repo so a 26-chunk
 # build reviewed by reading diffs has a mechanical backstop. Run: `uv run --frozen
-# ruff check`.
+# ruff check` — it covers src, scripts AND tests, because a test that lints cleanly
+# is a test whose fixtures and bindings actually resolve (an unused-variable finding
+# in tests/ caught a real NameError during this build).
 target-version = "py312"
+src = ["src", "scripts", "tests"]
 line-length = 100
 
 [tool.ruff.lint]

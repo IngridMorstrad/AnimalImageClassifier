@@ -12,8 +12,6 @@ behaviours that matter:
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 pytestmark = pytest.mark.slow
@@ -32,11 +30,11 @@ def _synthetic_manifest(run_cli, tmp_path, name="m.acmodel"):
 
 
 def test_checkpoint_is_written_and_carries_provenance(run_cli, tmp_path):
-    artifact, manifest = _synthetic_manifest(run_cli, tmp_path)
+    artifact, _manifest = _synthetic_manifest(run_cli, tmp_path)
     checkpoint = artifact.with_suffix(artifact.suffix + ".ckpt")
     assert checkpoint.is_file(), "a checkpoint is written after every epoch (§7.3)"
 
-    import torch  # noqa: PLC0415
+    import torch
 
     ckpt = torch.load(checkpoint, map_location="cpu", weights_only=False)
     assert ckpt["arch"] == "tinycnn"
@@ -59,7 +57,7 @@ def test_resume_continues_the_schedule(run_cli, tmp_path):
     assert "epoch 2/3" in resumed.stderr, resumed.stderr
     assert "epoch 1/3" not in resumed.stderr, "epoch 1 must not be re-run"
 
-    import torch  # noqa: PLC0415
+    import torch
 
     ckpt = torch.load(artifact.with_suffix(artifact.suffix + ".ckpt"), map_location="cpu", weights_only=False)
     assert ckpt["epoch"] == 3, "the schedule completed"

@@ -15,7 +15,6 @@ stderr. "Its bytes were not read" is a structural property of ``scan.py`` (it on
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 
@@ -37,8 +36,7 @@ def _classify(run_cli, card, output, *extra):
 @pytest.fixture
 def formats_card(tmp_path_factory):
     """A card that reaches most of the scan-time skip reasons (§5.1)."""
-    from PIL import Image  # noqa: PLC0415
-    from conftest import make_e2e_fixtures  # noqa: PLC0415
+    from conftest import make_e2e_fixtures
 
     root = tmp_path_factory.mktemp("fmtcard")
     dcim = root / "DCIM"

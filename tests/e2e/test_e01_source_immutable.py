@@ -25,11 +25,9 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 
 def _snapshot(root) -> dict[str, tuple[int, int, str]]:
-    import hashlib  # noqa: PLC0415
+    import hashlib
 
     return {
         str(p.relative_to(root)): (
@@ -83,10 +81,10 @@ def test_a_read_only_card_still_classifies(run_cli, fixture_card, tmp_path):
 
 def test_retag_never_writes_the_source(run_cli, fixture_card, tmp_path):
     """Re-tag is a pure output-tree rename; the card is never opened (§5.8)."""
-    import sys as _sys  # noqa: PLC0415
+    import sys as _sys
 
     _sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
-    from conftest_gui import make_client  # noqa: PLC0415
+    from conftest_gui import make_client
 
     output = tmp_path / "pics"
     _classify(run_cli, fixture_card, output)

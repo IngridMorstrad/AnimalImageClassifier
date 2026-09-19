@@ -49,7 +49,7 @@ def test_source_card_is_byte_identical_afterwards(
     classified, card_snapshot, fixture_card
 ) -> None:
     """Invariant I1: the card is opened read-only and never written to."""
-    from conftest import _hash_tree  # noqa: PLC0415 - the suite's own helper
+    from conftest import _hash_tree
 
     assert _hash_tree(fixture_card) == card_snapshot
 

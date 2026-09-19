@@ -25,8 +25,6 @@ from __future__ import annotations
 import sqlite3
 import subprocess
 
-import pytest
-
 
 def _run(run_cli, card, output, *extra) -> subprocess.CompletedProcess[str]:
     return run_cli(

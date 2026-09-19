@@ -40,7 +40,7 @@ def run_cli(cli_path: str):
     """Invoke the real CLI as a subprocess and return the completed process."""
 
     def _run(args: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(  # noqa: S603 - fixed executable, no shell
+        return subprocess.run(
             [cli_path, *args],
             capture_output=True,
             text=True,
@@ -59,7 +59,7 @@ def run_cli(cli_path: str):
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-import make_e2e_fixtures  # noqa: E402 - needs the sys.path line above
+import make_e2e_fixtures
 
 
 @pytest.fixture(scope="session")
@@ -185,7 +185,7 @@ def classified(run_cli, fixture_card: Path, tmp_path_factory) -> ClassifyRun:
 
 def _write_animal(directory: Path, name: str, *, seed: int) -> None:
     """A sharp JPEG with one dominant animal box beside it (scripted detector)."""
-    import json  # noqa: PLC0415
+    import json
 
     make_e2e_fixtures.noisy(make_e2e_fixtures.FRAME, seed).save(directory / name, quality=95)
     (directory / (name + ".boxes.json")).write_text(

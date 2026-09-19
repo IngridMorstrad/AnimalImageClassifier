@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_card, classify, make_client  # noqa: E402
+from conftest_gui import build_card, classify, make_client
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ def test_include_non_species_emits_scene_classes(run_cli, retagged_output, tmp_p
 
 def test_export_never_writes_the_source(run_cli, cli_path, tmp_path):
     """§7.5/I1: source images are read-only, and default export reads none of them."""
-    import hashlib  # noqa: PLC0415
+    import hashlib
 
     card = build_card(tmp_path / "card")
     output = tmp_path / "pics"

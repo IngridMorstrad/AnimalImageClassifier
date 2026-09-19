@@ -7,7 +7,7 @@ Three providers, three contracts:
 - ``ebird_enrich`` without ``ANIMAL_CLASSIFIER_EBIRD_API_KEY`` is fatal at config
   time (the key *is* a required value there).
 - the re-ranker's matching rule is pure and tested directly: an aliased candidate
-  not observed nearby is down-ranked ×0.25 and can lose the top slot, while a
+  not observed nearby is down-ranked x0.25 and can lose the top slot, while a
   candidate with no alias row is exempt (absence from our table is a gap in our
   data, never evidence about the bird's range).
 """
@@ -38,7 +38,7 @@ def test_ebird_enrich_without_key_is_fatal(run_cli, tmp_path):
 
 
 def test_reranker_downranks_unobserved_aliased_candidate() -> None:
-    from animal_classifier.classify.birds import (  # noqa: PLC0415
+    from animal_classifier.classify.birds import (
         EBirdAlias,
         Prediction,
         rerank_by_observations,
@@ -62,11 +62,11 @@ def test_reranker_downranks_unobserved_aliased_candidate() -> None:
     )
     assert changed
     assert reranked[0].slug == "arctic_tern", "the observed species now wins"
-    assert reranked[1].conf == 0.55 * 0.25, "the unobserved one was down-ranked ×0.25"
+    assert reranked[1].conf == 0.55 * 0.25, "the unobserved one was down-ranked x0.25"
 
 
 def test_reranker_exempts_candidates_with_no_alias() -> None:
-    from animal_classifier.classify.birds import (  # noqa: PLC0415
+    from animal_classifier.classify.birds import (
         EBirdAlias,
         Prediction,
         rerank_by_observations,
@@ -89,10 +89,10 @@ def test_reranker_exempts_candidates_with_no_alias() -> None:
 
 
 def test_alias_table_rejects_unknown_key_and_empty_row() -> None:
-    from animal_classifier.classify.birds import load_alias_table  # noqa: PLC0415
-    from animal_classifier.errors import ConfigError  # noqa: PLC0415
+    import pytest
 
-    import pytest  # noqa: PLC0415
+    from animal_classifier.classify.birds import load_alias_table
+    from animal_classifier.errors import ConfigError
 
     with pytest.raises(ConfigError):
         load_alias_table([("ghost", "X", "Y")], label_space={"arctic_tern"})

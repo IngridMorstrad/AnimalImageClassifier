@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_card, classify, make_client  # noqa: E402
+from conftest_gui import build_card, classify, make_client
 
 
 def _tree(output: Path) -> dict[str, str]:

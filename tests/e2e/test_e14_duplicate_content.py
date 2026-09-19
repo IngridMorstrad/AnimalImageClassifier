@@ -35,11 +35,10 @@ def _classify(run_cli, card, output):
 @pytest.fixture
 def duplicate_card(tmp_path_factory):
     """A card with the same photo under two names (byte-identical copies)."""
-    from PIL import Image  # noqa: PLC0415
 
     card = tmp_path_factory.mktemp("dupcard") / "DCIM"
     card.mkdir()
-    from conftest import make_e2e_fixtures  # noqa: PLC0415
+    from conftest import make_e2e_fixtures
 
     original = card / "a.jpg"
     make_e2e_fixtures.noisy(make_e2e_fixtures.FRAME, 42).save(original, quality=95)
@@ -75,8 +74,7 @@ def test_content_changed_in_place_is_a_new_image(run_cli, duplicate_card, tmp_pa
         before = c.execute("SELECT COUNT(*) AS n FROM images").fetchone()["n"]
 
     # Rewrite a.jpg with different content (and a matching sidecar) in place.
-    from PIL import Image  # noqa: PLC0415
-    from conftest import make_e2e_fixtures  # noqa: PLC0415
+    from conftest import make_e2e_fixtures
 
     a = duplicate_card / "DCIM" / "a.jpg"
     make_e2e_fixtures.noisy(make_e2e_fixtures.FRAME, 999).save(a, quality=95)

@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_orientation6_card, classify, make_client  # noqa: E402
+from conftest_gui import build_orientation6_card, classify, make_client
 
 STORED = (400, 300)      # what is on disk
 DISPLAYED = (300, 400)   # what exif_transpose produces — the one frame
@@ -36,7 +36,7 @@ def oriented(cli_path, tmp_path):
 
 def test_stored_raster_really_is_landscape(oriented):
     """Guard the fixture: without this the test could pass vacuously."""
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     card, _ = oriented
     photo = card / "DCIM" / "portrait.jpg"
@@ -87,9 +87,9 @@ def test_boxes_lie_inside_the_transposed_frame(oriented):
 
 def test_served_thumb_matches_the_stored_dimensions(oriented):
     """§6: the thumb is exif_transposed, so its aspect matches width/height."""
-    import io  # noqa: PLC0415
+    import io
 
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     _, output = oriented
     client = make_client(output)

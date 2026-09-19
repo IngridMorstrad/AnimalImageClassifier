@@ -52,7 +52,7 @@ def test_hardlink_mode_shares_the_inode(run_cli, five_image_card, tmp_path):
     st = filed.stat()
     assert st.st_nlink == 2, "the card entry plus the filed entry"
     # Find the matching source by inode.
-    sources = [p for p in five_image_card.rglob("*.jpg")]
+    sources = list(five_image_card.rglob("*.jpg"))
     assert any(p.stat().st_ino == st.st_ino for p in sources), "shares a source inode"
 
 

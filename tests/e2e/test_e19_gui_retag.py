@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_card, classify, make_client  # noqa: E402
+from conftest_gui import build_card, classify, make_client
 
 
 def _snapshot(root):
@@ -49,7 +49,7 @@ def test_retag_moves_the_file_and_records_the_override(setup):
     card, output = setup
     before = _snapshot(card)
     client = make_client(output, allow_new_labels=True)
-    sha = [i for i in client.get("/api/images").json()["items"] if i["label"] == "unknown"][0]["sha256"]
+    sha = next(i for i in client.get("/api/images").json()["items"] if i["label"] == "unknown")["sha256"]
 
     resp = client.post(f"/api/images/{sha}/label", json={"label": "lion", "note": "it is a lion"})
     assert resp.status_code == 200, resp.text
@@ -89,7 +89,7 @@ def test_unknown_label_needs_allow_new_labels(setup):
 def test_human_label_survives_reclassify(setup, cli_path):
     card, output = setup
     client = make_client(output, allow_new_labels=True)
-    sha = [i for i in client.get("/api/images").json()["items"] if i["label"] == "unknown"][0]["sha256"]
+    sha = next(i for i in client.get("/api/images").json()["items"] if i["label"] == "unknown")["sha256"]
     client.post(f"/api/images/{sha}/label", json={"label": "lion"})
 
     # A --reclassify run keeps label_source='human' (§5.9).

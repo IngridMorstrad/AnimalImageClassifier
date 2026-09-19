@@ -125,7 +125,7 @@ def test_manifests_have_the_expected_support(trained):
 
 def test_artifact_metadata_and_identity_leg(trained):
     """§7.1: the artifact is self-describing and provably loadable by classify."""
-    from animal_classifier.classify.artifact import load  # noqa: PLC0415
+    from animal_classifier.classify.artifact import load
 
     _, _, artifact, _ = trained
     loaded = load(artifact)
@@ -136,7 +136,7 @@ def test_artifact_metadata_and_identity_leg(trained):
     for entry in loaded.labels:
         assert entry.rank in {"species", "genus", "family", "order", "class"}, entry
 
-    import torch  # noqa: PLC0415
+    import torch
 
     blob = torch.load(artifact, map_location="cpu", weights_only=False)
     assert blob["train"]["calibrated_from"] is None
@@ -145,8 +145,8 @@ def test_artifact_metadata_and_identity_leg(trained):
 
 def test_val_top1_clears_the_gate(trained):
     """§11.2: ``val_top1 >= 0.55`` (chance 0.143, majority baseline 0.229)."""
-    _, _, artifact, train_stderr = trained
-    import torch  # noqa: PLC0415
+    _, _, artifact, _ = trained
+    import torch
 
     blob = torch.load(artifact, map_location="cpu", weights_only=False)
     val_top1 = blob["train"]["val_top1"]
@@ -168,7 +168,7 @@ def test_eval_agrees_with_the_artifact(trained, cli_path):
     )
     assert result.returncode == 0, result.stderr
     top1 = float(result.stdout.split("top1=")[1].split()[0])
-    import torch  # noqa: PLC0415
+    import torch
 
     recorded = torch.load(artifact, map_location="cpu", weights_only=False)["train"]["val_top1"]
     assert abs(top1 - recorded) < 1e-6, f"eval {top1} vs artifact {recorded}"
@@ -176,7 +176,7 @@ def test_eval_agrees_with_the_artifact(trained, cli_path):
 
 def test_real_photos_get_their_ground_truth_species(trained, cli_path, tmp_path):
     """The whole point: real photos, real detector, real head → the right species."""
-    import shutil  # noqa: PLC0415
+    import shutil
 
     _, _, artifact, _ = trained
     frozen = json.loads(FROZEN.read_text())["images"]

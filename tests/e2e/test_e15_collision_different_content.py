@@ -11,7 +11,6 @@ re-run recognises it as ``already_present`` rather than making a third.
 from __future__ import annotations
 
 import json
-import sqlite3
 
 import pytest
 
@@ -25,7 +24,7 @@ def _classify(run_cli, card, output):
 @pytest.fixture
 def name_collision_card(tmp_path_factory):
     """Two different animal photos sharing the basename ``IMG_0001.jpg``."""
-    from conftest import make_e2e_fixtures  # noqa: PLC0415
+    from conftest import make_e2e_fixtures
 
     root = tmp_path_factory.mktemp("collide")
     boxes = json.dumps([{"cls": "animal", "conf": 0.9, "x0": 50, "y0": 50, "x1": 450, "y1": 400}])

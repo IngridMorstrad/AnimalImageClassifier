@@ -9,8 +9,8 @@ from pathlib import Path
 
 def build_card(root: Path) -> Path:
     """A small card: one dominant animal, one landscape, one blurry (junk)."""
-    from PIL import Image, ImageFilter  # noqa: PLC0415
-    from conftest import make_e2e_fixtures  # noqa: PLC0415
+    from conftest import make_e2e_fixtures
+    from PIL import ImageFilter
 
     dcim = root / "DCIM"
     dcim.mkdir(parents=True)
@@ -35,10 +35,10 @@ def classify(cli_path: str, card: Path, output: Path, *extra: str) -> None:
 
 
 def make_client(output: Path, *, allow_new_labels: bool = False):
-    from starlette.testclient import TestClient  # noqa: PLC0415
+    from starlette.testclient import TestClient
 
-    from animal_classifier.config import Command, Config  # noqa: PLC0415
-    from animal_classifier.gui.app import create_app  # noqa: PLC0415
+    from animal_classifier.config import Command, Config
+    from animal_classifier.gui.app import create_app
 
     config = Config.resolve(
         command=Command.GUI,
@@ -61,7 +61,6 @@ def build_orientation6_card(root: Path) -> Path:
     """
     import json
 
-    from PIL import Image
 
     dcim = root / "DCIM"
     dcim.mkdir(parents=True)

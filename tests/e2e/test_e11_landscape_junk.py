@@ -33,8 +33,8 @@ def _classify(run_cli, card, output):
 @pytest.fixture
 def blur_card(tmp_path_factory):
     """Three animal-free photos: large sharp, large blurry, small sharp."""
-    from PIL import ImageFilter  # noqa: PLC0415
-    from conftest import make_e2e_fixtures  # noqa: PLC0415
+    from conftest import make_e2e_fixtures
+    from PIL import ImageFilter
 
     card = tmp_path_factory.mktemp("blur") / "DCIM"
     card.mkdir()

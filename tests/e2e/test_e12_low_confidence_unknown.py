@@ -38,7 +38,7 @@ def trained_tiny_model(run_cli, tmp_path_factory):
 
 @pytest.fixture
 def one_animal_card(tmp_path):
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     card = tmp_path / "card" / "DCIM"
     card.mkdir(parents=True)

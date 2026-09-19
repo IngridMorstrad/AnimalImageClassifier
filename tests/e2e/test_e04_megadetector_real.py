@@ -37,7 +37,7 @@ COCO_PEOPLE = "http://images.cocodataset.org/val2017/000000000885.jpg"
 
 
 def _weights_present() -> bool:
-    from pathlib import Path  # noqa: PLC0415
+    from pathlib import Path
 
     p = Path(WEIGHTS)
     return p.is_file() and p.stat().st_size == EXPECTED_BYTES
@@ -45,9 +45,9 @@ def _weights_present() -> bool:
 
 def _fetch(url: str, dest) -> bool:
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:  # noqa: S310 - fixed https/http COCO host
+        with urllib.request.urlopen(url, timeout=30) as response:
             data = response.read()
-    except Exception:  # noqa: BLE001 - any network failure -> skip, not fail
+    except Exception:
         return False
     if len(data) < 1000:
         return False

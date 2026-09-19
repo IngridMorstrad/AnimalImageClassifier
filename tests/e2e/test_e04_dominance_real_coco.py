@@ -46,9 +46,9 @@ def _weights_present() -> bool:
 
 def _fetch(name: str, dest: Path) -> bool:
     try:
-        with urllib.request.urlopen(COCO_URL.format(name=name), timeout=30) as r:  # noqa: S310
+        with urllib.request.urlopen(COCO_URL.format(name=name), timeout=30) as r:
             data = r.read()
-    except Exception:  # noqa: BLE001 - network failure -> skip, not fail
+    except Exception:
         return False
     if len(data) < 1000:
         return False
@@ -78,7 +78,7 @@ def dominance_run(cli_path, tmp_path_factory):
         pytest.skip("could not fetch enough COCO images (network unavailable)")
 
     output = root / "pics"
-    import subprocess  # noqa: PLC0415
+    import subprocess
 
     subprocess.run(
         [cli_path, "classify", str(card.parent), "--output", str(output),

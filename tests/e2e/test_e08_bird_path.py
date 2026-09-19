@@ -16,7 +16,6 @@ the clean slug.
 from __future__ import annotations
 
 import json
-import sqlite3
 
 import pytest
 
@@ -31,7 +30,7 @@ BIRD_NAMES = {
 
 def test_slug_produces_clean_bird_directories() -> None:
     """The taxonomy guarantee behind E8, asserted directly (fast, no training)."""
-    from animal_classifier.taxonomy import cub_key_from_dirname, slug  # noqa: PLC0415
+    from animal_classifier.taxonomy import cub_key_from_dirname, slug
 
     for common, expected in BIRD_NAMES.items():
         got = slug(common)
@@ -46,7 +45,7 @@ def test_slug_produces_clean_bird_directories() -> None:
 
 def _train_bird_head(run_cli, tmp_path, labels):
     """Train a tinycnn 'bird head' on synthetic crops labelled with CUB names."""
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     data = tmp_path / "birddata"
     data.mkdir()
@@ -74,7 +73,7 @@ def test_bird_head_files_into_human_readable_directory(run_cli, tmp_path):
     artifact = _train_bird_head(run_cli, tmp_path, labels)
 
     # The artifact's slugs are the clean names.
-    from animal_classifier.classify.artifact import load  # noqa: PLC0415
+    from animal_classifier.classify.artifact import load
 
     loaded = load(artifact)
     assert set(loaded.label_slugs) == set(BIRD_NAMES.values())
@@ -82,7 +81,7 @@ def test_bird_head_files_into_human_readable_directory(run_cli, tmp_path):
         assert not slug[0].isdigit(), slug
 
     # Classify a photo through it and assert the destination directory is a clean slug.
-    from PIL import Image  # noqa: PLC0415
+    from PIL import Image
 
     card = tmp_path / "card" / "DCIM"
     card.mkdir(parents=True)

@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest_gui import build_card, classify, make_client  # noqa: E402
+from conftest_gui import build_card, classify, make_client
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ def test_images_lists_boxes_and_candidates(classified_output):
     client = make_client(classified_output)
     data = client.get("/api/images").json()
     assert data["total"] == 3
-    animal = [i for i in data["items"] if i["label"] == "unknown"][0]
+    animal = next(i for i in data["items"] if i["label"] == "unknown")
     assert animal["boxes"], "the animal image carries its box"
     assert animal["boxes"][0]["cls"] == "animal"
 
@@ -104,7 +104,7 @@ def test_dangling_symlink_full_is_409(cli_path, tmp_path):
     output = tmp_path / "pics"
     classify(cli_path, card, output, "--link")
     # Remove the card so every symlink dangles (the normal reviewing state).
-    import shutil  # noqa: PLC0415
+    import shutil
 
     shutil.rmtree(card)
     client = make_client(output)
