@@ -190,10 +190,17 @@ def create_app(config: Config) -> Any:
         """
         limit = max(1, min(limit, 200))
         threshold = config.review_below
+        # `multiple` IS included. It was excluded on the reasoning that no single box
+        # owns the image, so there is nothing honest to train from — but that is wrong
+        # for the common real case: a herd frame is usually one species, and "these 25
+        # animals are all zebras" is both a true statement and a good training sample
+        # (exported against the largest box). Excluding them stranded exactly the
+        # photographs a safari card has most of. `landscape`/`junk` stay excluded —
+        # they have no animal to name.
         where = (
             "i.status = 'done' "
             "AND COALESCE(i.label_source, 'model') <> 'human' "
-            "AND i.label NOT IN ('landscape', 'junk', 'multiple') "
+            "AND i.label NOT IN ('landscape', 'junk') "
             "AND EXISTS (SELECT 1 FROM boxes b WHERE b.sha256 = i.sha256 AND b.cls = 'animal') "
             "AND (i.confidence IS NULL OR i.confidence < ?)"
         )

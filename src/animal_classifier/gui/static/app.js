@@ -191,13 +191,20 @@ function reviewCard(item, threshold) {
   const body = document.createElement("div");
   body.className = "review-body";
 
+  const animals = (item.boxes || []).filter((b) => b.cls === "animal").length;
   const conf = item.confidence == null
     ? `<span class="never">never scored</span> — no species model has seen this yet`
     : `model's best: <strong>${item.species_common || item.label}</strong>
        at ${(item.confidence * 100).toFixed(0)}% (below ${(threshold * 100).toFixed(0)}%)`;
+  // A herd frame has no single dominant animal, so say so: the label applies to the
+  // group, and training will use the largest animal in it.
+  const herd = item.label === "multiple"
+    ? `<br><span class="never">${animals} animals, none dominant</span> — name the group
+       if they are one species`
+    : (animals > 1 ? `<br>${animals} animals detected` : "");
   const head = document.createElement("p");
   head.className = "review-head";
-  head.innerHTML = conf;
+  head.innerHTML = conf + herd;
   body.appendChild(head);
 
   // One-click buttons for the model's own top guesses, best first.

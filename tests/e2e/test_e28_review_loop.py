@@ -306,3 +306,71 @@ def test_review_queue_paginates(cli_path, card, tmp_path):
     second_ids = {i["sha256"] for i in second["items"]}
     assert not (first_ids & second_ids), "pages do not overlap"
     assert second["total"] == first["total"], "total is stable across pages"
+
+
+
+def test_herd_frames_are_labellable_and_export_with_a_crop(cli_path, tmp_path):
+    """A `multiple` frame must be namable, and must train on an animal not the field.
+
+    Reported from a real safari card: 8 of 30 photographs were herds, and every one was
+    excluded from the review queue (so unlabellable) and would have exported without a
+    box (so trained on mostly grass). A herd is usually one species, so "these are all
+    zebras" is both true and good training data — against the largest animal box, since
+    a herd has no dominant one by construction.
+    """
+    import json as _json
+
+    from PIL import Image
+
+    # Two similar animals, neither dominant (equal areas -> `multiple`, §5.7).
+    card = tmp_path / "card" / "DCIM"
+    card.mkdir(parents=True)
+    photo = card / "herd.jpg"
+    Image.new("RGB", (800, 600), (90, 110, 70)).save(photo, quality=95)
+    (card / "herd.jpg.boxes.json").write_text(
+        _json.dumps([
+            {"cls": "animal", "conf": 0.9, "x0": 100, "y0": 100, "x1": 300, "y1": 300},
+            {"cls": "animal", "conf": 0.9, "x0": 450, "y0": 100, "x1": 650, "y1": 300},
+        ])
+    )
+    output = tmp_path / "pics"
+    result = _classify(cli_path, card.parent, output, "--detector", "scripted")
+    assert result.returncode in {0, 4}, result.stderr
+
+    with _catalog(output) as con:
+        row = con.execute("SELECT sha256, label FROM images").fetchone()
+        dominant = con.execute(
+            "SELECT COALESCE(SUM(is_dominant), 0) AS d FROM boxes WHERE sha256=?",
+            (row["sha256"],),
+        ).fetchone()["d"]
+    assert row["label"] == "multiple", "equal areas give no dominant animal"
+    assert dominant == 0, "which is exactly why it used to be unlabellable"
+
+    # 1. It is in the review queue.
+    client = make_client(output, allow_new_labels=True)
+    queue = client.get("/api/review").json()
+    assert row["sha256"] in {i["sha256"] for i in queue["items"]}, (
+        "a herd frame must be offered for labelling"
+    )
+
+    # 2. Naming the group works.
+    assert client.post(
+        f"/api/images/{row['sha256']}/label", json={"label": "zebra"}
+    ).status_code == 200
+
+    # 3. It exports with a real crop, not the whole frame.
+    manifest = tmp_path / "herd.jsonl"
+    export = subprocess.run(
+        [cli_path, "export-trainset", "--output", str(output),
+         "--destination", str(manifest)],
+        capture_output=True, text=True, check=False,
+    )
+    assert export.returncode == 0, export.stderr
+    assert "no_box=0" in export.stdout, f"the largest box is the fallback: {export.stdout}"
+
+    lines = [_json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
+    assert len(lines) == 1 and lines[0]["label"] == "zebra"
+    box = lines[0]["box"]
+    assert box, "a herd sample must carry a box"
+    area = (box[2] - box[0]) * (box[3] - box[1])
+    assert area < 800 * 600 * 0.5, "it is a crop of one animal, not the whole field"

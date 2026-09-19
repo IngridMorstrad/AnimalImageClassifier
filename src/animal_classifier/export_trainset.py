@@ -119,11 +119,21 @@ def _emit_line(conn, row, counts, *, include_model_labels, min_conf, include_non
         if row["confidence"] is None or row["confidence"] < min_conf:
             return None
 
-    # A species slug: emit with the image's dominant box if it has one.
+    # A species slug: emit with the image's dominant box. A human-labelled *herd*
+    # frame has no dominant box by construction (that is what made it `multiple`),
+    # so fall back to the largest animal box: on a single-species herd it is a
+    # correct, well-framed crop of that species. Without the fallback these samples
+    # trained on the whole frame instead — mostly grass.
     box = conn.execute(
         "SELECT x0, y0, x1, y1 FROM boxes WHERE sha256=? AND is_dominant=1 LIMIT 1",
         (row["sha256"],),
     ).fetchone()
+    if box is None:
+        box = conn.execute(
+            "SELECT x0, y0, x1, y1 FROM boxes WHERE sha256=? AND cls='animal' "
+            "ORDER BY area_frac DESC LIMIT 1",
+            (row["sha256"],),
+        ).fetchone()
     record = {"path": row["dest_path"], "label": label}
     if box is not None:
         record["box"] = [box["x0"], box["y0"], box["x1"], box["y1"]]
