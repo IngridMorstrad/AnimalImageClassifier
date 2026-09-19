@@ -349,10 +349,23 @@ class Catalog:
     and the GUI opens its own short-lived connections per request.
     """
 
-    def __init__(self, connection: sqlite3.Connection, path: Path, *, read_only: bool) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        path: Path,
+        *,
+        read_only: bool,
+        retry_writes: bool = True,
+    ) -> None:
         self._conn = connection
         self._path = path
         self._read_only = read_only
+        # `classify` is a long-lived writer and retries lock contention with the
+        # documented backoff. The GUI must **not**: §5.9 requires its re-tag to turn
+        # contention into a fast, deterministic 409 rather than a browser request
+        # hanging for ten seconds, so it opens with retry_writes=False and the very
+        # first SQLITE_BUSY raises CatalogLockedError.
+        self._retry_writes = retry_writes
 
     # ------------------------------------------------------------------ opening
 
@@ -363,6 +376,7 @@ class Catalog:
         *,
         read_only: bool = False,
         busy_timeout_ms: int = WRITER_BUSY_TIMEOUT_MS,
+        retry_writes: bool = True,
     ) -> Catalog:
         """Open (creating when writable) and validate the schema version.
 
@@ -370,6 +384,11 @@ class Catalog:
         provably cannot contend with a running ``classify`` (§5.9). A read-only
         open of a catalog that does not exist is an error naming the path, never a
         silently empty database.
+
+        ``retry_writes=False`` is the GUI's write mode: the first ``SQLITE_BUSY``
+        raises :class:`CatalogLockedError` instead of entering ``classify``'s
+        0.5/1/2/4/8 s backoff, which is what turns contention into a fast 409
+        (§5.9) rather than a hung browser request.
         """
         if read_only:
             if not path.is_file():
@@ -396,7 +415,7 @@ class Catalog:
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
 
-        catalog = cls(conn, path, read_only=read_only)
+        catalog = cls(conn, path, read_only=read_only, retry_writes=retry_writes)
         try:
             if not read_only:
                 # The version gate runs before the rest of the schema: a DB written
@@ -507,7 +526,7 @@ class Catalog:
         :class:`CatalogLockedError` so the caller records **one image** as failed
         and the run exits 4 — a per-image failure never aborts the run.
         """
-        attempts = len(LOCK_BACKOFF_SECONDS) + 1
+        attempts = len(LOCK_BACKOFF_SECONDS) + 1 if self._retry_writes else 1
         for attempt in range(attempts):
             try:
                 with self.write_tx() as conn:
@@ -515,9 +534,13 @@ class Catalog:
             except sqlite3.OperationalError as exc:
                 if not _is_locked(exc) or attempt == attempts - 1:
                     if _is_locked(exc):
+                        waited = (
+                            f"stayed locked for {sum(LOCK_BACKOFF_SECONDS):.1f}s"
+                            if self._retry_writes
+                            else "is locked (this writer does not retry, by design)"
+                        )
                         raise CatalogLockedError(
-                            f"{operation}: the catalog stayed locked for "
-                            f"{sum(LOCK_BACKOFF_SECONDS):.1f}s ({exc}). Another "
+                            f"{operation}: the catalog {waited} ({exc}). Another "
                             "classify run or GUI write is holding it."
                         ) from exc
                     raise

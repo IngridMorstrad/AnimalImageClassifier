@@ -314,7 +314,14 @@ def _do_retag(config: Config, sha256: str, row: sqlite3.Row, new_label: str, not
 
     old_dest = Path(row["dest_path"])
     mode = Mode(row["mode"]) if row["mode"] else config.mode
-    with Catalog.open(config.catalog_path, busy_timeout_ms=GUI_BUSY_TIMEOUT_MS) as catalog:
+    # retry_writes=False: §5.9 wants contention to surface as a fast 409, not as a
+    # browser request sitting through classify's 0.5/1/2/4/8 s backoff. The override
+    # insert is the first write, so losing the lock changes nothing on disk.
+    with Catalog.open(
+        config.catalog_path,
+        busy_timeout_ms=GUI_BUSY_TIMEOUT_MS,
+        retry_writes=False,
+    ) as catalog:
         catalog.insert_override(sha256, old_label=row["label"], new_label=new_label, note=note)
         catalog.update_image(
             sha256, label=new_label, label_source=str(LabelSource.HUMAN),

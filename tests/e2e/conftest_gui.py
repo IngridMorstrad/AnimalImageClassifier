@@ -48,3 +48,35 @@ def make_client(output: Path, *, allow_new_labels: bool = False):
         },
     )
     return TestClient(create_app(config))
+
+
+
+def build_orientation6_card(root: Path) -> Path:
+    """A card holding one EXIF-orientation-6 photo whose stored raster is landscape.
+
+    Orientation 6 means "rotate 90° CW to display", so a 400x300 *stored* raster is a
+    300x400 *displayed* image. §5.2's single frame is the displayed one, so the catalog
+    must record width < height — that is invariant I9, and it is the whole point of the
+    fixture.
+    """
+    import json
+
+    from PIL import Image
+
+    dcim = root / "DCIM"
+    dcim.mkdir(parents=True)
+    photo = dcim / "portrait.jpg"
+
+    # A landscape raster (wider than tall) ...
+    from conftest import make_e2e_fixtures
+
+    image = make_e2e_fixtures.noisy((400, 300), 7)
+    exif = image.getexif()
+    exif[0x0112] = 6  # Orientation = 6
+    image.save(photo, exif=exif, quality=95)
+
+    # ... with a box stated in the TRANSPOSED frame (300 wide x 400 tall).
+    (dcim / "portrait.jpg.boxes.json").write_text(
+        json.dumps([{"cls": "animal", "conf": 0.9, "x0": 20, "y0": 30, "x1": 280, "y1": 370}])
+    )
+    return root
