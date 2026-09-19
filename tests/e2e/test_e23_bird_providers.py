@@ -80,7 +80,7 @@ def _enricher(tmp_path, handler=None, key="dummy-key"):
     """Build the provider, optionally with a MockTransport client factory."""
     factory = None
     if handler is not None:
-        def factory():  # noqa: ANN202
+        def factory():
             return httpx.Client(transport=httpx.MockTransport(handler))
     return EBirdEnricher(
         api_key=key,

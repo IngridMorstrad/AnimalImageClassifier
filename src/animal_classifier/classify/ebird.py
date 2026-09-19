@@ -50,7 +50,7 @@ ClientFactory = Callable[[], Any]
 
 
 def _default_client_factory() -> Any:
-    import httpx  # noqa: PLC0415
+    import httpx
 
     return httpx.Client(timeout=httpx.Timeout(READ_TIMEOUT, connect=CONNECT_TIMEOUT))
 
@@ -150,7 +150,7 @@ class EBirdEnricher:
 
     def _canonicalise(self, candidates: tuple[Prediction, ...]) -> tuple[Prediction, ...]:
         """Replace names with eBird's orthography where an alias row exists (§5.6)."""
-        from dataclasses import replace  # noqa: PLC0415
+        from dataclasses import replace
 
         out = []
         for candidate in candidates:
@@ -185,7 +185,7 @@ class EBirdEnricher:
                 params={"lat": lat, "lng": lon, "dist": SEARCH_RADIUS_KM, "back": LOOKBACK_DAYS},
                 headers={"X-eBirdApiToken": self._api_key},
             )
-        except Exception as error:  # noqa: BLE001 - any transport failure degrades
+        except Exception as error:
             self._warn_once(f"eBird unreachable ({type(error).__name__}: {error})")
             return None
 
@@ -200,7 +200,7 @@ class EBirdEnricher:
             return None
         try:
             payload = response.json()
-        except Exception as error:  # noqa: BLE001 - bad JSON degrades
+        except Exception as error:
             self._warn_once(f"eBird returned unparseable JSON ({error})")
             return None
         if not isinstance(payload, list):
