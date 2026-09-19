@@ -19,10 +19,35 @@ curl -L -o models/md_v5a.0.0.pt \
 #   sha256 94e88fe97c8050f2e3d0cc4cb4f64729d639d74312dcbe2f74f8eecd3b01b276
 ```
 
-## 2. The species head (`models/species.acmodel`)
+## 2. The species head — from your own photos (recommended)
 
-Finetune `efficientnet_b0` on COCO's ten animal categories. First stage the data and
-build the manifest, then train.
+If you have a card of your own animals, this is the shortest and best path: label them
+and train on those labels. No dataset download.
+
+```bash
+uv run animal-classifier label /Volumes/SDCARD -o ~/animal_pics      # name them in the browser
+uv run animal-classifier export-trainset -o ~/animal_pics --destination mine.jsonl
+uv run animal-classifier train --manifest mine.jsonl --arch efficientnet_b0 \
+    --out models/species.acmodel \
+    --backbone-weights models/backbones/efficientnet_b0_ra-3dd342df.pth
+```
+
+The backbone (21 MB) is what makes a small hand-labelled set work; get it with:
+
+```bash
+mkdir -p models/backbones
+curl -L -o models/backbones/efficientnet_b0_ra-3dd342df.pth \
+  https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth
+```
+
+A model trained this way knows *your* species — including ones no public dataset
+covers. Re-run `label` after each training round to name whatever is still uncertain.
+
+## 2b. The species head — from COCO instead (no photos of your own)
+
+Finetune `efficientnet_b0` on COCO's ten animal categories. Note this only teaches it
+`bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe` — **no lions, no
+antelope**. Stage the data and build the manifest, then train.
 
 ```bash
 # COCO val2017 images + annotations (≈1 GB)

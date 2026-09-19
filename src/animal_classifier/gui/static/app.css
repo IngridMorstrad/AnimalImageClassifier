@@ -57,3 +57,7 @@ main { flex:1; padding:1rem; }
 .review-form input { background:var(--bg); border:1px solid #333; color:var(--fg); padding:.3rem .5rem; border-radius:4px; min-width:18rem; }
 .review-form .apply { background:var(--accent); border:none; color:#fff; padding:.3rem .8rem; border-radius:4px; cursor:pointer; }
 .review-form .skip { background:none; border:1px solid #333; color:var(--muted); padding:.3rem .7rem; border-radius:4px; cursor:pointer; }
+
+.more-wrap { text-align:center; padding:.8rem; }
+.more { background:var(--panel); border:1px solid #35516c; color:var(--fg); padding:.45rem 1rem; border-radius:4px; cursor:pointer; font:inherit; }
+.more:hover { background:var(--accent); }

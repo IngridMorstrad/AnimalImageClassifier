@@ -215,3 +215,94 @@ def test_a_scored_sub_threshold_unknown_keeps_its_confidence(cli_path, card, tmp
     )
     for row in scored:
         assert 0.0 <= row["confidence"] < 0.999
+
+
+
+# --------------------------------------------------------------------------- #
+# The label-first entry point
+# --------------------------------------------------------------------------- #
+
+
+def test_detect_only_skips_species_inference_even_with_a_model(cli_path, card, tmp_path):
+    """``label``'s ingest half: find the animals, do not guess at them.
+
+    Running a model that cannot name your animals costs time and fills the review
+    queue with guesses you did not ask for, so ``label`` (and ``classify
+    --detect-only``) skip inference even when an artifact is present and loadable.
+    """
+    root, _ = card
+
+    # A real, loadable artifact that is deliberately irrelevant to these photos.
+    artifact = tmp_path / "irrelevant.acmodel"
+    trained = subprocess.run(
+        [cli_path, "train", "--dataset", "synthetic", "--arch", "tinycnn",
+         "--out", str(artifact), "--input-size", "64", "--epochs-head", "1",
+         "--epochs-finetune", "0", "--batch-size", "16"],
+        capture_output=True, text=True, check=False,
+    )
+    assert trained.returncode == 0, trained.stderr
+
+    output = tmp_path / "pics"
+    result = _classify(
+        cli_path, root, output,
+        "--species-model", str(artifact), "--detect-only",
+    )
+    assert result.returncode in {0, 4}, result.stderr
+
+    with _catalog(output) as con:
+        rows = con.execute("SELECT label, confidence, model_id FROM images").fetchall()
+    assert rows
+    for row in rows:
+        assert row["confidence"] is None, "no species inference ran, so no score"
+        assert "tinycnn" not in (row["model_id"] or ""), (
+            f"the species model must not be attributed: {row['model_id']}"
+        )
+        assert row["model_id"].startswith("megadetector"), row["model_id"]
+        assert row["label"] in {"unknown", "multiple", "landscape", "junk"}
+
+
+def test_detect_only_does_not_demand_an_explicit_species_model(cli_path, card, tmp_path):
+    """``--detect-only`` with a named-but-absent model is fine: it is not used.
+
+    Without this, ``label`` would inherit the fail-loud check for an explicitly named
+    artifact and refuse to run before the user had ever trained one — the exact
+    chicken-and-egg that made the first version of this workflow unusable.
+    """
+    root, _ = card
+    output = tmp_path / "pics"
+    result = _classify(
+        cli_path, root, output,
+        "--species-model", str(tmp_path / "does-not-exist.acmodel"), "--detect-only",
+    )
+    assert result.returncode in {0, 4}, result.stderr
+    with _catalog(output) as con:
+        assert con.execute("SELECT COUNT(*) AS n FROM images").fetchone()["n"] > 0
+
+
+def test_label_command_is_exposed_and_documented(run_cli):
+    """The label-first entry point exists and explains itself."""
+    result = run_cli(["label", "--help"])
+    assert result.returncode == 0, result.stderr
+    assert "--skip-ingest" in result.stdout
+    assert "--review-below" in result.stdout
+
+    top = run_cli(["--help"])
+    assert "label" in top.stdout, "label appears in the command list"
+
+
+def test_review_queue_paginates(cli_path, card, tmp_path):
+    """A real card has hundreds of photos; the queue must page rather than truncate."""
+    root, _truth = card
+    output = tmp_path / "pics"
+    _classify(cli_path, root, output, "--detect-only")
+
+    client = make_client(output, allow_new_labels=True)
+    first = client.get("/api/review?limit=2&offset=0").json()
+    assert len(first["items"]) == 2
+    assert first["total"] >= 2, "total is the true remaining count, not the page size"
+
+    second = client.get("/api/review?limit=2&offset=2").json()
+    first_ids = {i["sha256"] for i in first["items"]}
+    second_ids = {i["sha256"] for i in second["items"]}
+    assert not (first_ids & second_ids), "pages do not overlap"
+    assert second["total"] == first["total"], "total is stable across pages"

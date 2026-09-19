@@ -172,6 +172,12 @@ def build_classifier(config: Config) -> Any:
     """
     from .config import SPECIES_INFERENCE_WIRED
 
+    if config.detect_only:
+        log.info(
+            "detect-only: skipping species inference, so every animal reaches the "
+            "review queue for you to name"
+        )
+        return None
     if not SPECIES_INFERENCE_WIRED:
         return None
     if not config.species_model.exists():

@@ -146,20 +146,37 @@ loadRun(); loadLabels(); loadImages();
 // --------------------------------------------------------------------------- //
 
 let reviewLabels = [];
+const REVIEW_PAGE = 40;
 
-async function loadReview() {
-  const data = await json("/api/review");
+// A card of hundreds is normal, so the queue is paged: 40 at a time, "load more"
+// for the rest, and the badge always shows the true remaining total.
+async function loadReview(append = false) {
+  const list = document.getElementById("review-list");
+  const offset = append ? list.querySelectorAll(".review-card").length : 0;
+  const data = await json(`/api/review?limit=${REVIEW_PAGE}&offset=${offset}`);
   reviewLabels = data.known_labels || [];
+
   const badge = document.getElementById("review-count");
   badge.textContent = data.total ? String(data.total) : "";
-  const list = document.getElementById("review-list");
-  list.innerHTML = "";
-  if (!data.items.length) {
+
+  if (!append) list.innerHTML = "";
+  list.querySelector(".more-wrap")?.remove();
+
+  if (!data.items.length && !append) {
     list.innerHTML = `<p class="empty">Nothing to review — every animal is either
       confidently named or already labelled by you.</p>`;
     return;
   }
   for (const item of data.items) list.appendChild(reviewCard(item, data.review_below));
+
+  const shown = list.querySelectorAll(".review-card").length;
+  if (shown < data.total) {
+    const wrap = document.createElement("div");
+    wrap.className = "more-wrap";
+    wrap.innerHTML = `<button class="more">Load more (${shown} of ${data.total} shown)</button>`;
+    wrap.querySelector(".more").onclick = () => loadReview(true);
+    list.appendChild(wrap);
+  }
 }
 
 function reviewCard(item, threshold) {
@@ -240,8 +257,15 @@ async function applyLabel(sha256, label, card) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, note: "labelled in review" }),
     });
+    // Remove the card in place and decrement the badge, rather than reloading the
+    // whole page — on a 500-photo queue a full refresh after every label would make
+    // the UI unusable and lose your scroll position.
     card.remove();
-    loadReview(); loadLabels(); loadImages();
+    const badge = document.getElementById("review-count");
+    const remaining = Math.max(0, (parseInt(badge.textContent, 10) || 1) - 1);
+    badge.textContent = remaining ? String(remaining) : "";
+    if (!document.querySelectorAll("#review-list .review-card").length) loadReview();
+    loadLabels();
   } catch (e) {
     alert(`${e.message}\n\nIf this is a species the model has never seen, restart the GUI with --allow-new-labels.`);
   }

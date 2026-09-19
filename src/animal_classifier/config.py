@@ -129,17 +129,25 @@ DEFAULTS: Final[Mapping[str, Any]] = {
 #: how a reintroduced box-area floor would be caught (invariant I2).
 KNOWN_TOML_KEYS: Final = frozenset(DEFAULTS)
 
-#: The command that produces a species/bird artifact, quoted in the error message
-#: for a missing one (design review finding 11b) so the remedy is copy-pasteable.
+#: The remedy quoted when a species/bird artifact is missing (design review finding
+#: 11b) — and it must be a command that **actually works from a fresh clone**. The
+#: previous version named ``data/manifests/coco_species.jsonl``, which only exists
+#: after staging ~1 GB of COCO and running a builder, so the "remedy" was guaranteed
+#: to fail with `manifest not found` for anyone who followed it. The real answer for
+#: a user with their own photographs is the review loop: label a card, export, train.
 TRAIN_HINT_SPECIES: Final = (
-    "animal-classifier train --manifest data/manifests/coco_species.jsonl "
-    "--out {path} --arch efficientnet_b0 "
-    "--backbone-weights models/backbones/efficientnet_b0_ra-3dd342df.pth"
+    "animal-classifier label <YOUR-CARD> --output {output_root}   "
+    "# name the animals in your browser, then:\n"
+    "  animal-classifier export-trainset --output {output_root} --destination mine.jsonl\n"
+    "  animal-classifier train --manifest mine.jsonl --out {path} --arch efficientnet_b0\n"
+    "  (no species model is required to run `classify` — animals are filed as "
+    "`unknown` until you train one)"
 )
 TRAIN_HINT_BIRDS: Final = (
-    "animal-classifier train --manifest data/manifests/cub_birds.jsonl "
-    "--out {path} --arch convnext_nano "
-    "--backbone-weights models/backbones/convnext_nano_d1h-7eb4bdea.pth"
+    "animal-classifier label <YOUR-CARD> --output {output_root}   "
+    "# name the birds in your browser, then:\n"
+    "  animal-classifier export-trainset --output {output_root} --destination birds.jsonl\n"
+    "  animal-classifier train --manifest birds.jsonl --out {path} --arch convnext_nano"
 )
 DETECTOR_WEIGHTS_URL: Final = (
     "https://github.com/agentmorris/MegaDetector/releases/download/v5.0/md_v5a.0.0.pt"
@@ -231,6 +239,11 @@ class Config:
     #: guess the tool was willing to file but a human should still confirm.
     review_below: float = 0.60
     no_download: bool = False
+    #: Skip species inference even when a model is available. What
+    #: ``animal-classifier label`` runs on: you are about to name these animals
+    #: yourself, so running a model that cannot name them only costs time and would
+    #: fill the review queue with guesses you did not ask for.
+    detect_only: bool = False
     species_model_explicit: bool = False
     ebird_api_key: str | None = field(repr=False, default=None)
 
@@ -355,6 +368,7 @@ class Config:
                 layers, "review_below", float, 0.60, minimum=0.0, maximum=1.0
             ),
             no_download=_flag(layers, "no_download"),
+            detect_only=_flag(layers, "detect_only"),
             species_model_explicit=layers.find("species_model") is not None,
             ebird_api_key=_ebird_api_key(bird_provider, env),
         )
@@ -822,9 +836,15 @@ def _validate_required_assets(config: Config) -> None:
         # a specific model, so its absence is fatal (I7). A present model at the
         # default path is loaded and used; an absent default path is the pass-through
         # path, not an error.
-        if SPECIES_INFERENCE_WIRED and config.species_model_explicit:
+        if SPECIES_INFERENCE_WIRED and config.species_model_explicit and not config.detect_only:
             required.append(
-                ("species_model", config.species_model, TRAIN_HINT_SPECIES.format(path=config.species_model))
+                (
+                    "species_model",
+                    config.species_model,
+                    TRAIN_HINT_SPECIES.format(
+                        path=config.species_model, output_root=config.output_root
+                    ),
+                )
             )
     for key, path, remedy in required:
         if not path.exists():

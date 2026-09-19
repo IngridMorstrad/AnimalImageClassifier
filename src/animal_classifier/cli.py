@@ -184,6 +184,11 @@ def classify(
         "--no-download",
         help="Never fetch missing model weights; fail instead (for offline machines).",
     ),
+    detect_only: bool = typer.Option(
+        False,
+        "--detect-only",
+        help="Find animals but skip species inference; everything lands for review.",
+    ),
 ) -> None:
     """Walk SOURCE, classify every image, and file it under OUTPUT/<label>/."""
     if link and hardlink:
@@ -218,6 +223,7 @@ def classify(
         "limit": limit,
         "device": device,
         "no_download": no_download or None,
+        "detect_only": detect_only or None,
     }
 
     code = _classify(overrides)
@@ -285,6 +291,92 @@ def _report(summary: Any) -> None:
                 for label, count in sorted(summary.label_counts.items())
             ),
         )
+
+
+@app.command(
+    help=(
+        "Label the animals on a card in your browser — no model needed.\n\n"
+        "One step: detects the animals, then opens the Review queue so you can name "
+        "them. Nothing is classified into species first, because there is nothing to "
+        "classify with until you have taught it some. When you are done, run "
+        "`export-trainset` and `train` to turn your labels into a model."
+    )
+)
+def label(
+    source: Path = typer.Argument(..., help="SD-card directory to walk recursively."),
+    output: Path = typer.Option(
+        None, "--output", "-o", help="Destination root [default: ~/animal_pics]."
+    ),
+    port: int = typer.Option(8765, "--port", help="Port to serve the labelling UI on."),
+    review_below: float = typer.Option(
+        None, "--review-below", help="Queue animals scored below this [0.60]."
+    ),
+    link: bool = typer.Option(False, "--link", help="Symlink instead of copying."),
+    limit: int = typer.Option(
+        None, "--limit", help="Only ingest this many images before labelling."
+    ),
+    jobs: int = typer.Option(None, "--jobs", help="Worker threads for decode/hash."),
+    no_download: bool = typer.Option(
+        False, "--no-download", help="Never fetch missing model weights; fail instead."
+    ),
+    skip_ingest: bool = typer.Option(
+        False,
+        "--skip-ingest",
+        help="Card already ingested; go straight to the labelling UI.",
+    ),
+) -> None:
+    """Detect the animals on a card, then open the browser to name them."""
+    code = _label(
+        source=source, output=output, port=port, review_below=review_below,
+        link=link, limit=limit, jobs=jobs, no_download=no_download,
+        skip_ingest=skip_ingest,
+    )
+    raise typer.Exit(code)
+
+
+def _label(
+    *,
+    source: Path,
+    output: Path | None,
+    port: int,
+    review_below: float | None,
+    link: bool,
+    limit: int | None,
+    jobs: int | None,
+    no_download: bool,
+    skip_ingest: bool,
+) -> int:
+    """Ingest (detect only), then serve the Review queue.
+
+    Deliberately runs **no species model**, even if one exists: this command is for
+    the case where the model cannot name your animals yet, so every detected animal
+    lands in the review queue for you. `classify --species-model ...` is the command
+    for using a trained model.
+    """
+    if not skip_ingest:
+        log.info("detecting animals on %s — this is the only pass before you label", source)
+        code = _classify(
+            {
+                "source_root": str(source),
+                "output_root": str(output) if output is not None else None,
+                "mode": Mode.LINK if link else None,
+                "limit": limit,
+                "jobs": jobs,
+                "no_download": no_download or None,
+                # Detect only: skip species inference even if a model is present.
+                # This command exists for labelling, not for inference.
+                "detect_only": True,
+            }
+        )
+        if code not in (0, 4):
+            return code
+        log.info("ingest complete; opening the labelling UI")
+
+    # --allow-new-labels is on by default here: the entire point of this command is
+    # naming species the model has never heard of.
+    return _gui(
+        output=output, port=port, allow_new_labels=True, review_below=review_below
+    )
 
 
 @app.command()

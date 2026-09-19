@@ -44,40 +44,47 @@ uv run animal-classifier verify --output ~/animal_pics
 rule, so photos land in `unknown/` (one dominant animal), `multiple/`, `landscape/`
 or `junk/`. To get actual species names, teach it your animals ↓
 
-## Teaching it your animals (the review loop)
+## Teaching it your animals: label first, then train
 
-The fastest way to get `lion/` and `impala/` directories is to let the tool ask you
-about the animals it cannot name, and train on your answers. No dataset download, no
-manifest writing.
+You do **not** need a model, a dataset, or a manifest to start. Point `label` at your
+card and name the animals it finds:
 
 ```bash
-# 1. Classify your card. Animals it cannot name land in unknown/.
-uv run animal-classifier classify /Volumes/SDCARD -o ~/animal_pics
+# 1. Detect the animals and open the browser to name them. That is the whole step.
+uv run animal-classifier label /Volumes/SDCARD -o ~/animal_pics
 
-# 2. Open the Review tab and name them. It queues every animal scored below 60%
-#    (--review-below), least confident first, with the model's own guesses as
-#    one-click buttons. Use --allow-new-labels for species the model has never seen.
-uv run animal-classifier gui -o ~/animal_pics --allow-new-labels
-
-# 3. Turn your labels into training data and train on them.
+# 2. Turn your labels into a model.
 uv run animal-classifier export-trainset -o ~/animal_pics --destination mine.jsonl
 uv run animal-classifier train --manifest mine.jsonl --arch efficientnet_b0 \
-    --out models/species.acmodel \
-    --backbone-weights models/backbones/efficientnet_b0_ra-3dd342df.pth
+    --out models/species.acmodel
 
-# 4. Re-run with your model. Fewer photos come back unknown; repeat as you like.
+# 3. From now on, classify with your model. Anything it is unsure about
+#    (below --review-below, default 60%) comes back to the Review tab.
 uv run animal-classifier classify /Volumes/SDCARD -o ~/animal_pics \
     --species-model models/species.acmodel --reclassify
+uv run animal-classifier label /Volumes/SDCARD -o ~/animal_pics --skip-ingest   # label the rest
 ```
 
-Each pass shrinks the review queue. Your corrections are never lost — they live in
-the catalog's append-only `overrides` table, they survive `--reclassify`, and they are
-re-applied even after a `--ignore-overrides` run.
+`label` runs **detect-only**: it finds the animals but deliberately does not guess at
+their species, even if a model exists, because you are about to name them yourself.
+It also implies `--allow-new-labels`, so you can type `lion` or `impala` — species no
+model has ever heard of. `--skip-ingest` goes straight to the UI for a card already
+ingested.
 
-Measured on a 12-photo round trip (`tests/e2e/test_e28_review_loop.py`): starting from
-12 unnamed animals, one labelling session produced a model that named **8 of 12**
-automatically, cutting the queue to 6. Step 3's backbone comes from
-[docs/ARTIFACTS.md](docs/ARTIFACTS.md).
+The Review tab queues every un-named animal **least-confident first**, offers the
+model's own top-3 guesses as one-click buttons, and pages 40 at a time so a card of
+hundreds stays usable. Your labels are never lost: they live in the catalog's
+append-only `overrides` table, survive `--reclassify`, and are re-applied even after
+an `--ignore-overrides` run.
+
+Adding `--backbone-weights models/backbones/efficientnet_b0_ra-3dd342df.pth` to step 2
+gives markedly better accuracy from the same labels — see
+[docs/ARTIFACTS.md](docs/ARTIFACTS.md) for the one-line download.
+
+**A note on herd photos.** A frame with several animals and no dominant one is filed
+`multiple/` and is *not* queued for review, because no single box owns the image so
+there is nothing honest to train from. Those are still re-taggable in the Browse tab if
+you want them filed differently.
 
 ## Setup
 
