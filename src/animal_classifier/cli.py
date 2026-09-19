@@ -179,6 +179,11 @@ def classify(
         None, "--limit", help="Stop after this many images are submitted to inference."
     ),
     device: Device = typer.Option(None, "--device", help="Compute device."),
+    no_download: bool = typer.Option(
+        False,
+        "--no-download",
+        help="Never fetch missing model weights; fail instead (for offline machines).",
+    ),
 ) -> None:
     """Walk SOURCE, classify every image, and file it under OUTPUT/<label>/."""
     if link and hardlink:
@@ -212,6 +217,7 @@ def classify(
         "jobs": jobs,
         "limit": limit,
         "device": device,
+        "no_download": no_download or None,
     }
 
     code = _classify(overrides)

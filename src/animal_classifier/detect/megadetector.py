@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import logging
+import os
 import sys
 import threading
 from pathlib import Path
@@ -67,8 +68,114 @@ _STRIDE: Final = 64
 #: Read the file in 1 MiB chunks to hash it without a 280 MB resident copy.
 _HASH_CHUNK: Final = 1 << 20
 
+#: Download progress is logged at roughly this granularity, so a 280 MB fetch on a
+#: slow connection visibly progresses instead of looking hung.
+_PROGRESS_STEP: Final = 0.10
+
 _ALIAS_LOCK = threading.Lock()
 _ALIASES_INSTALLED = False
+
+
+def ensure_weights(weights: Path, *, allow_download: bool = True) -> None:
+    """Make ``weights`` exist and be the real checkpoint, downloading if needed.
+
+    **Why auto-download is not an I7 violation.** I7 forbids silently substituting a
+    *different* value for a missing required one. This substitutes nothing: it
+    acquires the one artifact the code was written against, identified by the exact
+    byte length and sha256 pinned in this module, and refuses anything else. A
+    download that does not match is deleted, not used. The alternative — refusing
+    and printing a ``curl`` command — made a fresh clone unable to classify a single
+    photograph until the user hand-ran a step the tool could do itself.
+
+    The bytes land at ``<weights>.part`` and are verified **before** being renamed
+    into place, so an interrupted or corrupted fetch can never leave a file at the
+    real path that later runs would trust.
+
+    ``allow_download=False`` (``--no-download``) restores the fail-loud behaviour for
+    air-gapped or bandwidth-metered machines.
+    """
+    if weights.exists():
+        _verify_asset(weights)
+        return
+
+    if not allow_download:
+        raise AssetError(
+            f"detector weights not found at {weights}, and --no-download was given. "
+            f"Fetch them manually ({EXPECTED_BYTES} bytes):\n  curl -L -o {weights} "
+            f"{DOWNLOAD_URL}",
+            exit_code=EXIT_CONFIG,
+        )
+
+    log.info(
+        "detector weights not present; downloading MegaDetector v5a (%.0f MB) to %s. "
+        "This happens once.",
+        EXPECTED_BYTES / 1_000_000,
+        weights,
+    )
+    _download(DOWNLOAD_URL, weights)
+    _verify_asset(weights)
+    log.info("detector weights ready at %s", weights)
+
+
+def _download(url: str, destination: Path) -> None:
+    """Stream ``url`` to ``destination``, verifying before it takes the real name."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise AssetError(
+            f"cannot create {destination.parent} for the detector weights: {error}"
+        ) from error
+
+    partial = destination.with_name(destination.name + ".part")
+    digest = hashlib.sha256()
+    written = 0
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            total = int(response.headers.get("Content-Length") or EXPECTED_BYTES)
+            next_report = _PROGRESS_STEP
+            with partial.open("wb") as handle:
+                while chunk := response.read(_HASH_CHUNK):
+                    handle.write(chunk)
+                    digest.update(chunk)
+                    written += len(chunk)
+                    if total and written / total >= next_report:
+                        log.info(
+                            "  downloaded %d%% (%.0f/%.0f MB)",
+                            round(written / total * 100),
+                            written / 1_000_000,
+                            total / 1_000_000,
+                        )
+                        next_report += _PROGRESS_STEP
+    except (urllib.error.URLError, OSError, TimeoutError) as error:
+        _remove_quietly(partial)
+        raise AssetError(
+            f"could not download the detector weights from {url}: "
+            f"{type(error).__name__}: {error}. Fetch them manually with:\n"
+            f"  curl -L -o {destination} {url}"
+        ) from error
+
+    # Verify the temp file before it is allowed to take the real name, so a bad
+    # download is never trusted by a later run.
+    actual = digest.hexdigest()
+    if written != EXPECTED_BYTES or actual != EXPECTED_SHA256:
+        _remove_quietly(partial)
+        raise AssetError(
+            f"the downloaded detector weights do not match the pinned checkpoint "
+            f"(got {written} bytes / sha256 {actual}, expected {EXPECTED_BYTES} / "
+            f"{EXPECTED_SHA256}). The download was discarded. Retry, or fetch "
+            f"manually from {url}"
+        )
+    os.replace(partial, destination)
+
+
+def _remove_quietly(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as error:  # pragma: no cover - best-effort cleanup
+        log.debug("could not remove %s: %s", path, error)
 
 
 def _install_yolov5_aliases() -> None:
@@ -127,17 +234,20 @@ class MegaDetector:
         image_size: int,
         max_det: int,
         jobs: int | None = None,
+        allow_download: bool = True,
     ) -> MegaDetector:
-        """Verify, unpickle and prepare the checkpoint for inference (§5.4).
+        """Fetch (if needed), verify, unpickle and prepare the checkpoint (§5.4).
 
-        Fatal, with the download URL, on a missing file or a size/sha256 mismatch —
-        the load unpickles arbitrary objects, so an unverified file is never
-        trusted (§10.1). ``jobs`` sets ``torch.set_num_threads`` when given, matching
-        §9's "torch parallelizes internally" note.
+        The checkpoint is downloaded on first use and verified against its pinned
+        byte length and sha256 before it is trusted — the load unpickles arbitrary
+        objects, so an unverified file is never used (§10.1).
+        ``allow_download=False`` turns a missing file back into a fatal error naming
+        the manual command. ``jobs`` sets ``torch.set_num_threads`` when given,
+        matching §9's "torch parallelizes internally" note.
         """
         import torch
 
-        _verify_asset(weights)
+        ensure_weights(weights, allow_download=allow_download)
         _install_yolov5_aliases()
 
         if jobs is not None and jobs > 0:

@@ -32,14 +32,21 @@ def _no_label_dirs(output) -> bool:
     return not any(p.is_dir() and p.name in LABEL_DIRS for p in output.iterdir())
 
 
-def test_missing_detector_weights_names_the_download_url(run_cli, tmp_path):
+def test_missing_detector_weights_are_fatal_only_under_no_download(run_cli, tmp_path):
+    """Absent weights are a *download*, not a config error — unless you opted out.
+
+    This row of §10.1 moved deliberately (see E27): refusing to run because a
+    hash-pinned artifact has not been fetched yet made a fresh clone unable to
+    classify anything. With ``--no-download`` the original fail-loud contract stands,
+    and that is what is asserted here.
+    """
     card = tmp_path / "card"
     card.mkdir()
     output = tmp_path / "out"
     absent_weights = tmp_path / "absent_md.pt"  # point away from any cached checkpoint
     result = run_cli(
         ["classify", str(card), "-o", str(output), "--detector", "megadetector",
-         "--detector-weights", str(absent_weights)]
+         "--detector-weights", str(absent_weights), "--no-download"]
     )
     assert result.returncode == 3, result.stderr
     assert "md_v5a.0.0.pt" in result.stderr or "MegaDetector" in result.stderr

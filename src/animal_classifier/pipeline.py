@@ -152,6 +152,7 @@ def build_detector(config: Config) -> Detector:
             image_size=config.detector_image_size,
             max_det=config.detector_max_det,
             jobs=config.jobs,
+            allow_download=not config.no_download,
         )
     raise AssetError(  # pragma: no cover - DetectorKind is a closed enum
         f"unknown detector {config.detector!r}"

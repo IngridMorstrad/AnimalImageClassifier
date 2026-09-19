@@ -21,24 +21,29 @@ animal with no trained head is filed as `unknown` rather than a guessed species.
 ## Quick start
 
 ```bash
-uv sync                                   # create .venv, install everything
-
-# 1. Get the detector (280 MB, hash-pinned)
-curl -L -o models/md_v5a.0.0.pt \
-  https://github.com/agentmorris/MegaDetector/releases/download/v5.0/md_v5a.0.0.pt
-
-# 2. Classify a card
-uv run animal-classifier classify /Volumes/SDCARD --output ~/animal_pics --detector megadetector
-
-# 3. Review and correct labels in the browser
-uv run animal-classifier gui --output ~/animal_pics     # http://127.0.0.1:8765
-
-# 4. Turn your corrections into the next training set
-uv run animal-classifier export-trainset --output ~/animal_pics --destination trainset.jsonl
+uv sync                                                          # create .venv, install
+uv run animal-classifier classify /Volumes/SDCARD -o ~/animal_pics
 ```
 
-Train your own species head from that manifest with `animal-classifier train`; see
-[docs/ARTIFACTS.md](docs/ARTIFACTS.md).
+That is the whole setup. The first run downloads the MegaDetector v5a detector
+(280 MB, once) and verifies it against a pinned sha256 before using it; later runs
+reuse it. Pass `--no-download` on an offline or metered machine to refuse instead.
+
+```bash
+# Review and correct labels in the browser
+uv run animal-classifier gui --output ~/animal_pics     # http://127.0.0.1:8765
+
+# Turn your corrections into the next training set
+uv run animal-classifier export-trainset --output ~/animal_pics --destination trainset.jsonl
+
+# Check assets and catalog/filesystem consistency
+uv run animal-classifier verify --output ~/animal_pics
+```
+
+**What you get without a species model:** real animal detection and the dominance
+rule, so photos land in `unknown/` (one dominant animal), `multiple/`, `landscape/`
+or `junk/`. To get actual species names (`zebra/`, `elephant/`) train a head — see
+[docs/ARTIFACTS.md](docs/ARTIFACTS.md) — then add `--species-model models/species.acmodel`.
 
 ## Setup
 

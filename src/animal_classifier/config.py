@@ -225,6 +225,7 @@ class Config:
     force_bird_head: bool
     allow_new_labels: bool
     config_path: Path | None
+    no_download: bool = False
     species_model_explicit: bool = False
     ebird_api_key: str | None = field(repr=False, default=None)
 
@@ -345,6 +346,7 @@ class Config:
             force_bird_head=_flag(layers, "force_bird_head"),
             allow_new_labels=_flag(layers, "allow_new_labels"),
             config_path=toml_origin,
+            no_download=_flag(layers, "no_download"),
             species_model_explicit=layers.find("species_model") is not None,
             ebird_api_key=_ebird_api_key(bird_provider, env),
         )
@@ -792,7 +794,11 @@ def _validate_required_assets(config: Config) -> None:
     """Which assets a command genuinely needs — checked before anything is written."""
     required: list[tuple[str, Path, str]] = []
     if config.command is Command.CLASSIFY:
-        if config.detector is DetectorKind.MEGADETECTOR:
+        # The detector checkpoint is *fetched on first use* and verified against its
+        # pinned size + sha256, so its absence is not a configuration error — it is
+        # a download this run will do. Only demand it up front when the user has
+        # opted out of downloading (`--no-download`), where absence really is fatal.
+        if config.detector is DetectorKind.MEGADETECTOR and config.no_download:
             required.append(
                 (
                     "detector_weights",
