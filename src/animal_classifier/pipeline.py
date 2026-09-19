@@ -223,6 +223,25 @@ def classify_run(config: Config, *, argv: Sequence[str]) -> RunSummary:
         )
         try:
             _process_card(config, catalog, run.run_id, detector, classifier, counters)
+        except KeyboardInterrupt:
+            # Ctrl-C is a legitimate way to stop a long card. Close the run out with
+            # the work that *did* land so `verify` and the GUI see honest counts, and
+            # say plainly that re-running resumes — every finished image is already
+            # `done`, so the next run skips it.
+            catalog.finish_run(
+                run.run_id,
+                state=RunState.FAILED,
+                n_total=counters.n_total,
+                n_done=counters.n_done,
+                n_skipped=counters.n_skipped,
+                n_failed=counters.n_failed,
+            )
+            log.warning(
+                "interrupted after %d image(s); they are saved. Re-run the same "
+                "command to continue where it stopped.",
+                counters.n_done,
+            )
+            raise
         except BaseException:
             catalog.finish_run(
                 run.run_id,
@@ -691,14 +710,27 @@ def _bounded_map(
     """
     pending: deque[tuple[T, Future[R]]] = deque()
     remaining = iter(items)
-    for item in itertools.islice(remaining, window):
-        pending.append((item, pool.submit(function, item)))
-    while pending:
-        item, future = pending.popleft()
-        try:
-            yield item, future.result(), None
-        except BaseException as error:
-            yield item, None, error
-        nxt = next(remaining, None)
-        if nxt is not None:
-            pending.append((nxt, pool.submit(function, nxt)))
+    try:
+        for item in itertools.islice(remaining, window):
+            pending.append((item, pool.submit(function, item)))
+        while pending:
+            item, future = pending.popleft()
+            try:
+                result = future.result()
+            except Exception as error:
+                # Deliberately `Exception`, not `BaseException`. Catching
+                # GeneratorExit/KeyboardInterrupt here and then yielding again is
+                # what raised "RuntimeError: generator ignored GeneratorExit" and
+                # buried a clean Ctrl-C under two tracebacks.
+                yield item, None, error
+            else:
+                yield item, result, None
+            nxt = next(remaining, None)
+            if nxt is not None:
+                pending.append((nxt, pool.submit(function, nxt)))
+    finally:
+        # On any exit — normal, Ctrl-C, or the consumer closing this generator — drop
+        # work that has not started. The executor's shutdown otherwise waits for every
+        # queued task, so Ctrl-C stalled for a whole window of images before exiting.
+        for _item, future in pending:
+            future.cancel()
