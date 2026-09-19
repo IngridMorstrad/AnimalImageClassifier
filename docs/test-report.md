@@ -15,20 +15,23 @@ Covers `src`, `scripts` **and** `tests` — a test that lints cleanly is one who
 fixtures and bindings actually resolve (an unused-variable finding in `tests/` caught
 a real `NameError` during this build).
 
-## e2e suite — 147 tests, 0 failures, 0 xfail
+## e2e suite — 150 tests, 0 failures, 0 xfail
 
 Run in windows (the CPU-only sandbox caps a single command's wall clock); totals are
 the sum.
 
 ```
-$ pytest -m "not slow" -k "cli_surface or e02 or e05 or e06 or e26 or e11 or e16 or e17 or e22 or e01 or e03"
-64 passed
+$ pytest -m "not slow" -k "cli_surface or e02 or e05 or e06 or e26 or e11 or e16 or e17 or e22 or e01 or e03 or e23"
+72 passed
 
 $ pytest -m "not slow" -k "e13 or e14 or e15 or e18"
 23 passed
 
-$ pytest -m "not slow" -k "e19 or e20 or e21 or e23 or e24 or e25"
-37 passed
+$ pytest -m "not slow" -k "e19 or e20 or e21"
+24 passed
+
+$ pytest -m "not slow" -k "e24 or e25"
+8 passed
 
 $ pytest -m "slow" -k "not real_coco and not dominance_real"
 15 passed
@@ -40,7 +43,7 @@ $ pytest tests/e2e/test_e07_real_coco_species.py            # real finetune + id
 5 passed
 ```
 
-**Total: 147 passed (124 fast + 23 slow), 0 failed, 0 xfailed.**
+**Total: 150 passed (127 fast + 23 slow), 0 failed, 0 xfailed.**
 
 ## The real-data results
 
@@ -97,7 +100,11 @@ present and green.
    paths against the manifest's own directory, so both builders emitted paths that did
    not resolve. Absolute now.
 
-Five of the six were found by the test written for the behaviour, not by review.
+7. **E23 was a unit test** — my first version imported `rerank_by_observations`
+   directly, which §11 forbids. Replaced with the real `ebird_enrich` provider driven
+   through `httpx.MockTransport`, §11.2's one sanctioned seam at that boundary.
+
+Six of the seven were found by the test written for the behaviour, not by review.
 
 ## Recorded deviations
 
