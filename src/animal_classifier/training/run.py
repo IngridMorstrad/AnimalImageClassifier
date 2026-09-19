@@ -87,6 +87,7 @@ def run_train(
     jobs: int,
     seed: int,
     device: str,
+    no_download: bool = False,
 ) -> trainer_mod.TrainResult:
     """Build the dataset, train, and write the artifact. Returns the metrics."""
     import torch
@@ -105,6 +106,16 @@ def run_train(
 
     samples: list[Sample] = load_manifest(manifest)
     manifest_id = trainer_mod.manifest_sha256(manifest)
+
+    # Fetch the matching pretrained backbone unless one was named explicitly.
+    # Without it `train` silently starts from random weights, which on a
+    # hand-labelled set of a few dozen photographs produces a confidently wrong
+    # model — a bad result that is invisible in the log.
+    from .backbones import ensure_backbone
+
+    backbone_weights = ensure_backbone(
+        arch, explicit=backbone_weights, allow_download=not no_download
+    )
 
     config = trainer_mod.TrainConfig(
         arch=arch,

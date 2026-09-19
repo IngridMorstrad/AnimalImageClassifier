@@ -374,3 +374,88 @@ def test_herd_frames_are_labellable_and_export_with_a_crop(cli_path, tmp_path):
     assert box, "a herd sample must carry a box"
     area = (box[2] - box[0]) * (box[3] - box[1])
     assert area < 800 * 600 * 0.5, "it is a crop of one animal, not the whole field"
+
+
+
+# --------------------------------------------------------------------------- #
+# retrain: one command from labels to model
+# --------------------------------------------------------------------------- #
+
+
+def test_retrain_exports_and_trains_in_one_step(cli_path, card, tmp_path, monkeypatch):
+    """`retrain` is export-trainset + train, with the backbone fetched if needed."""
+    root, truth = card
+    output = tmp_path / "pics"
+    _classify(cli_path, root, output, "--detect-only")
+
+    client = make_client(output, allow_new_labels=True)
+    with _catalog(output) as con:
+        name_of = {
+            r["sha256"]: Path(r["path"]).name
+            for r in con.execute("SELECT sha256, path FROM sources")
+        }
+    for item in client.get("/api/review?limit=200").json()["items"]:
+        name = name_of[item["sha256"]]
+        if name in truth:
+            client.post(f"/api/images/{item['sha256']}/label", json={"label": truth[name]})
+
+    artifact = tmp_path / "species.acmodel"
+    result = subprocess.run(
+        [cli_path, "retrain", "-o", str(output), "--out", str(artifact),
+         "--input-size", "128", "--epochs-head", "1", "--epochs-finetune", "0",
+         "--batch-size", "8"],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert artifact.is_file(), "one command produced a model"
+    assert "exported your labels" in result.stderr
+
+    from animal_classifier.classify.artifact import load
+
+    loaded = load(artifact)
+    assert set(loaded.label_slugs), "it learned the labels the human applied"
+
+
+def test_retrain_with_no_labels_fails_with_the_next_step(cli_path, card, tmp_path):
+    """The useful failure: tell the user to go and label, not 'no training samples'."""
+    root, _ = card
+    output = tmp_path / "pics"
+    _classify(cli_path, root, output, "--detect-only")  # ingested, nothing labelled
+
+    result = subprocess.run(
+        [cli_path, "retrain", "-o", str(output), "--out", str(tmp_path / "m.acmodel")],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 3, result.stderr
+    assert "no labelled images" in result.stderr
+    assert "animal-classifier label" in result.stderr, "it names the next command"
+
+
+def test_an_explicitly_named_missing_backbone_is_fatal(tmp_path):
+    """An explicit --backbone-weights is a user's choice: absence is a mistake."""
+    from animal_classifier.errors import AssetError
+    from animal_classifier.training.backbones import ensure_backbone
+
+    with pytest.raises(AssetError, match="does not exist"):
+        ensure_backbone("efficientnet_b0", explicit=tmp_path / "absent.pth")
+
+
+def test_tinycnn_needs_no_backbone():
+    from animal_classifier.training.backbones import ensure_backbone
+
+    assert ensure_backbone("tinycnn", allow_download=False) is None
+
+
+def test_a_tampered_backbone_is_rejected(tmp_path, monkeypatch):
+    """The hash pin is enforced on an already-present file, not only on download."""
+    from animal_classifier.errors import AssetError
+    from animal_classifier.training import backbones
+
+    known = backbones.KNOWN_BACKBONES["efficientnet_b0"]
+    fake_dir = tmp_path / "backbones"
+    fake_dir.mkdir()
+    (fake_dir / known.filename).write_bytes(b"not the real weights")
+    monkeypatch.setattr(backbones, "default_backbone_dir", lambda: fake_dir)
+
+    with pytest.raises(AssetError, match="bytes, expected"):
+        backbones.ensure_backbone("efficientnet_b0", allow_download=False)

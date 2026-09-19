@@ -463,13 +463,21 @@ def train(
     jobs: int = typer.Option(7, "--jobs", help="torch thread count."),
     seed: int = typer.Option(0, "--seed", help="RNG seed."),
     device: str = typer.Option("auto", "--device", help="auto | cpu | cuda."),
+    no_download: bool = typer.Option(
+        False, "--no-download", help="Never fetch the pretrained backbone; fail instead."
+    ),
 ) -> None:
-    """Train or finetune the species classifier."""
+    """Train or finetune the species classifier.
+
+    The matching pretrained backbone is downloaded automatically unless
+    `--backbone-weights` names one. Training without it starts from random weights,
+    which on a small hand-labelled set gives a poor model.
+    """
     code = _train(
         manifest=manifest, out=out, arch=arch, dataset=dataset, input_size=input_size,
         epochs_head=epochs_head, epochs_finetune=epochs_finetune, batch_size=batch_size,
         unfreeze_blocks=unfreeze_blocks, backbone_weights=backbone_weights, resume=resume,
-        jobs=jobs, seed=seed, device=device,
+        jobs=jobs, seed=seed, device=device, no_download=no_download,
     )
     raise typer.Exit(code)
 
@@ -571,6 +579,109 @@ def _calibrate_to_new_artifact(artifact, samples, model_path, out, device, ev) -
     )
     log.info("calibrated: T=%.4f -> %s (%s)", temperature, out, new_id)
     typer.echo(f"calibrated temperature={temperature:.4f} -> {out}")
+
+
+@app.command(
+    help=(
+        "Train a species model from the labels you applied in the Review tab.\n\n"
+        "One step: exports your labels as a manifest, downloads the pretrained "
+        "backbone if needed, and trains. Run it again after each labelling session — "
+        "each round names more of your animals automatically."
+    )
+)
+def retrain(
+    output: Path = typer.Option(
+        None, "--output", "-o", help="Labelled output root [default: ~/animal_pics]."
+    ),
+    out: Path = typer.Option(
+        Path("models/species.acmodel"), "--out", help="Where to write the model."
+    ),
+    arch: str = typer.Option("efficientnet_b0", "--arch", help="Backbone architecture."),
+    input_size: int = typer.Option(224, "--input-size", help="Input resolution."),
+    epochs_head: int = typer.Option(3, "--epochs-head", help="Head-only epochs."),
+    epochs_finetune: int = typer.Option(5, "--epochs-finetune", help="Finetune epochs."),
+    batch_size: int = typer.Option(16, "--batch-size", help="Batch size."),
+    jobs: int = typer.Option(7, "--jobs", help="torch thread count."),
+    include_model_labels: bool = typer.Option(
+        False,
+        "--include-model-labels",
+        help="Also train on confident model labels, not only your own.",
+    ),
+    min_conf: float = typer.Option(
+        0.7, "--min-conf", help="Confidence floor for --include-model-labels."
+    ),
+    keep_manifest: Path = typer.Option(
+        None, "--keep-manifest", help="Also write the intermediate manifest here."
+    ),
+) -> None:
+    """Export your labels and train a model from them, in one step."""
+    code = _retrain(
+        output=output, out=out, arch=arch, input_size=input_size,
+        epochs_head=epochs_head, epochs_finetune=epochs_finetune,
+        batch_size=batch_size, jobs=jobs,
+        include_model_labels=include_model_labels, min_conf=min_conf,
+        keep_manifest=keep_manifest,
+    )
+    raise typer.Exit(code)
+
+
+def _retrain(**kwargs: Any) -> int:
+    """export-trainset → train, sharing one resolved config and one manifest."""
+    import tempfile
+
+    from .export_trainset import run_export
+
+    keep = kwargs["keep_manifest"]
+    try:
+        config = Config.resolve(
+            command=Command.EXPORT_TRAINSET,
+            cli={"output_root": str(kwargs["output"]) if kwargs["output"] else None},
+            config_path=_GLOBAL["config_path"],
+        )
+        manifest = (
+            Path(keep)
+            if keep
+            else Path(tempfile.mkdtemp(prefix="animal-classifier-")) / "labels.jsonl"
+        )
+        summary = run_export(
+            config,
+            destination=manifest,
+            include_model_labels=kwargs["include_model_labels"],
+            min_conf=kwargs["min_conf"],
+            include_non_species=False,
+        )
+        log.info("exported your labels: %s", summary)
+        exported = int(summary.split("exported=")[1].split()[0])
+        if exported == 0:
+            log.error(
+                "no labelled images to train on yet. Label some animals first:\n"
+                "  animal-classifier label <YOUR-CARD> --output %s",
+                config.output_root,
+            )
+            from .errors import EXIT_CONFIG
+
+            return EXIT_CONFIG
+        if exported < 20:
+            log.warning(
+                "only %d labelled sample(s). This will train, but expect a weak model; "
+                "50-100+ labels across several species works much better.",
+                exported,
+            )
+    except AnimalClassifierError as error:
+        log.error("%s", error)
+        return error.exit_code
+    except Exception as error:
+        log.error("retrain failed during export: %s: %s", type(error).__name__, error,
+                  exc_info=log.isEnabledFor(logging.DEBUG))
+        return EXIT_UNEXPECTED
+
+    return _train(
+        manifest=manifest, out=kwargs["out"], arch=kwargs["arch"], dataset="manifest",
+        input_size=kwargs["input_size"], epochs_head=kwargs["epochs_head"],
+        epochs_finetune=kwargs["epochs_finetune"], batch_size=kwargs["batch_size"],
+        unfreeze_blocks=2, backbone_weights=None, resume=False,
+        jobs=kwargs["jobs"], seed=0, device="auto", no_download=False,
+    )
 
 
 @app.command("export-trainset")
