@@ -31,3 +31,29 @@ main { flex:1; padding:1rem; }
 .detail .picker { margin-top:1rem; display:flex; gap:.5rem; }
 .detail .picker input { background:var(--panel); border:1px solid #333; color:var(--fg); padding:.3rem; }
 .detail .picker button { background:var(--accent); border:none; color:#fff; padding:.3rem .8rem; border-radius:4px; cursor:pointer; }
+
+
+/* Tabs and the review queue */
+.tabs { display:flex; gap:.25rem; padding:0 1rem; background:var(--panel); border-bottom:1px solid #000; }
+.tab { background:none; border:none; color:var(--muted); padding:.5rem .9rem; cursor:pointer; font:inherit; border-bottom:2px solid transparent; }
+.tab.active { color:var(--fg); border-bottom-color:var(--accent); }
+.badge { background:var(--accent); color:#fff; border-radius:9px; padding:0 .4rem; font-size:.75rem; }
+.badge:empty { display:none; }
+.review-intro { color:var(--muted); max-width:60ch; }
+.review-intro code { background:var(--panel); padding:0 .25rem; border-radius:3px; }
+.empty { color:var(--muted); }
+.review-card { display:flex; gap:1rem; background:var(--panel); border-radius:6px; padding:.6rem; margin-bottom:.6rem; }
+.review-card img { width:160px; height:120px; object-fit:cover; border-radius:4px; cursor:pointer; image-orientation:from-image; }
+.review-body { flex:1; display:flex; flex-direction:column; gap:.5rem; }
+.review-head { margin:0; color:var(--muted); }
+.review-head strong { color:var(--fg); }
+.never { color:#e0a53f; }
+.suggestions { display:flex; gap:.4rem; flex-wrap:wrap; }
+.suggest { background:#24374a; border:1px solid #35516c; color:var(--fg); padding:.3rem .6rem; border-radius:4px; cursor:pointer; font:inherit; }
+.suggest:hover { background:var(--accent); }
+.suggest .score { color:var(--muted); font-size:.8rem; }
+.suggest:hover .score { color:#dfe9f5; }
+.review-form { display:flex; gap:.4rem; align-items:center; }
+.review-form input { background:var(--bg); border:1px solid #333; color:var(--fg); padding:.3rem .5rem; border-radius:4px; min-width:18rem; }
+.review-form .apply { background:var(--accent); border:none; color:#fff; padding:.3rem .8rem; border-radius:4px; cursor:pointer; }
+.review-form .skip { background:none; border:1px solid #333; color:var(--muted); padding:.3rem .7rem; border-radius:4px; cursor:pointer; }

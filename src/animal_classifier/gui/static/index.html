@@ -11,12 +11,25 @@
     <h1>animal-classifier</h1>
     <span id="run-info" class="run-info"></span>
   </header>
+  <nav class="tabs">
+    <button id="tab-browse" class="tab active">Browse</button>
+    <button id="tab-review" class="tab">Review <span id="review-count" class="badge"></span></button>
+  </nav>
   <div class="layout">
     <aside id="sidebar">
       <h2>Labels</h2>
       <ul id="label-list"></ul>
     </aside>
     <main>
+      <section id="review-pane" class="hidden">
+        <p class="review-intro">
+          Animals the model could not confidently name, least confident first.
+          Pick a name and it becomes training data &mdash; then run
+          <code>export-trainset</code> and <code>train</code>.
+        </p>
+        <div id="review-list"></div>
+      </section>
+      <div id="browse-pane">
       <div class="filters">
         <label>min conf <input type="range" id="min-conf" min="0" max="1" step="0.05" value="0" /></label>
         <span id="min-conf-value">0.00</span>
@@ -25,6 +38,7 @@
         <span id="unscored-note" class="unscored-note"></span>
       </div>
       <div id="grid" class="grid"></div>
+      </div>
       <div id="detail" class="detail hidden"></div>
     </main>
   </div>

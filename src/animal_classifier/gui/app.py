@@ -172,6 +172,50 @@ def create_app(config: Config) -> Any:
             raise HTTPException(409, str(error)) from error
         return {"dest_path": str(new_path), "label": new_label}
 
+    @app.get("/api/review")
+    def api_review(limit: int = 60, offset: int = 0) -> dict[str, Any]:
+        """The active-learning queue: animals the model could not confidently name.
+
+        An image qualifies when it has at least one **animal** box, a human has not
+        already labelled it, and either it was never scored (no species model yet) or
+        its winning score is below ``review_below``. That is precisely the set worth a
+        human's attention: ``landscape``/``junk`` have no animal to name, ``multiple``
+        has no single box that owns the image, and a human-labelled row is already
+        settled.
+
+        Ordered **least-confident first**, with never-scored rows ahead of scored ones,
+        so the most informative labels come first. Each item carries the model's top-k
+        guesses so the UI can offer them as one-click buttons — the fastest correct
+        label is one the user only has to confirm.
+        """
+        limit = max(1, min(limit, 200))
+        threshold = config.review_below
+        where = (
+            "i.status = 'done' "
+            "AND COALESCE(i.label_source, 'model') <> 'human' "
+            "AND i.label NOT IN ('landscape', 'junk', 'multiple') "
+            "AND EXISTS (SELECT 1 FROM boxes b WHERE b.sha256 = i.sha256 AND b.cls = 'animal') "
+            "AND (i.confidence IS NULL OR i.confidence < ?)"
+        )
+        with _ro() as conn:
+            total = conn.execute(
+                f"SELECT COUNT(*) AS n FROM images i WHERE {where}", (threshold,)
+            ).fetchone()["n"]
+            rows = conn.execute(
+                f"SELECT i.* FROM images i WHERE {where} "
+                # NULL (never scored) first, then ascending score: most informative first.
+                "ORDER BY (i.confidence IS NOT NULL), i.confidence ASC, i.sha256 "
+                "LIMIT ? OFFSET ?",
+                (threshold, limit, offset),
+            ).fetchall()
+            items = [_image_payload(conn, row) for row in rows]
+        return {
+            "items": items,
+            "total": total,
+            "review_below": threshold,
+            "known_labels": sorted(known_labels - set(RESERVED_LABELS)),
+        }
+
     @app.get("/api/run")
     def api_run() -> dict[str, Any]:
         with _ro() as conn:

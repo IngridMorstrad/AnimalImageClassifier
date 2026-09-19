@@ -269,14 +269,23 @@ def _species_decision(
 ) -> Decision:
     """Wrap :func:`species_or_unknown`'s verdict for the winning box.
 
-    ``unknown`` keeps ``dominant=winner`` — the box did win — but carries no
-    species name or confidence, because there is none to carry and copying the
-    rejected below-threshold value into ``images.confidence`` would make an
-    ``unknown`` row look like a measurement.
+    ``unknown`` keeps ``dominant=winner`` — the box did win — and carries **no
+    species name**, because there is none the tool will stand behind.
+
+    **But a *scored* ``unknown`` keeps its confidence** (§5.9). The distinction is
+    load-bearing: NULL means "this label has no confidence by construction"
+    (``landscape``, ``junk``, ``multiple``, or an ``unknown`` whose boxes were all
+    degenerate), while a sub-threshold score is a *real measurement* that happens to
+    be below the gate. Nulling it would throw away the one number that ranks
+    "probably a zebra, 0.41" ahead of "no idea at all" — which is exactly what the
+    GUI's review queue sorts on, and what makes the confidence slider able to see
+    these rows at all.
     """
     label = species_or_unknown(winner, min_species_confidence=min_species_confidence)
     if label == LABEL_UNKNOWN:
-        return Decision(label=label, confidence=None, dominant=winner)
+        # winner.species_conf is None only when the box was never scored (no model,
+        # or a degenerate crop); then NULL is correct by construction.
+        return Decision(label=label, confidence=winner.species_conf, dominant=winner)
     assert winner.species is not None  # species_or_unknown returned a slug
     return Decision(
         label=label,

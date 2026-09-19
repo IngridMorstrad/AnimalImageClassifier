@@ -133,3 +133,130 @@ document.getElementById("include-unscored").onchange = (e) => { state.includeUns
 document.getElementById("search").oninput = (e) => { state.q = e.target.value; loadImages(); };
 
 loadRun(); loadLabels(); loadImages();
+
+
+
+// --------------------------------------------------------------------------- //
+// Review tab: the active-learning queue.
+//
+// Every animal the model could not confidently name, least confident first, with
+// its own top guesses offered as one-click buttons. The fastest correct label is
+// one the user only has to confirm; free text is there for the (common) case where
+// the model has never seen the species at all.
+// --------------------------------------------------------------------------- //
+
+let reviewLabels = [];
+
+async function loadReview() {
+  const data = await json("/api/review");
+  reviewLabels = data.known_labels || [];
+  const badge = document.getElementById("review-count");
+  badge.textContent = data.total ? String(data.total) : "";
+  const list = document.getElementById("review-list");
+  list.innerHTML = "";
+  if (!data.items.length) {
+    list.innerHTML = `<p class="empty">Nothing to review — every animal is either
+      confidently named or already labelled by you.</p>`;
+    return;
+  }
+  for (const item of data.items) list.appendChild(reviewCard(item, data.review_below));
+}
+
+function reviewCard(item, threshold) {
+  const card = document.createElement("div");
+  card.className = "review-card";
+
+  const img = document.createElement("img");
+  img.src = `/api/images/${item.sha256}/thumb`;
+  img.alt = "";
+  img.onclick = () => openDetail(item);
+
+  const body = document.createElement("div");
+  body.className = "review-body";
+
+  const conf = item.confidence == null
+    ? `<span class="never">never scored</span> — no species model has seen this yet`
+    : `model's best: <strong>${item.species_common || item.label}</strong>
+       at ${(item.confidence * 100).toFixed(0)}% (below ${(threshold * 100).toFixed(0)}%)`;
+  const head = document.createElement("p");
+  head.className = "review-head";
+  head.innerHTML = conf;
+  body.appendChild(head);
+
+  // One-click buttons for the model's own top guesses, best first.
+  const dominant = (item.boxes || []).find((b) => b.is_dominant) || (item.boxes || [])[0];
+  const suggestions = (dominant && dominant.candidates) ? dominant.candidates.slice(0, 3) : [];
+  if (suggestions.length) {
+    const row = document.createElement("div");
+    row.className = "suggestions";
+    for (const c of suggestions) {
+      const b = document.createElement("button");
+      b.className = "suggest";
+      b.innerHTML = `${c.common} <span class="score">${(c.score * 100).toFixed(0)}%</span>`;
+      b.onclick = () => applyLabel(item.sha256, slugify(c.common), card);
+      row.appendChild(b);
+    }
+    body.appendChild(row);
+  }
+
+  // Free text + datalist of labels already known, for a species the model lacks.
+  const form = document.createElement("div");
+  form.className = "review-form";
+  const listId = `labels-${item.sha256.slice(0, 8)}`;
+  form.innerHTML = `
+    <input list="${listId}" placeholder="type a species (e.g. lion)" />
+    <datalist id="${listId}">${reviewLabels.map((l) => `<option value="${l}">`).join("")}</datalist>
+    <button class="apply">Label</button>
+    <button class="skip">Skip</button>`;
+  const input = form.querySelector("input");
+  const apply = () => {
+    const value = slugify(input.value);
+    if (value) applyLabel(item.sha256, value, card);
+  };
+  form.querySelector(".apply").onclick = apply;
+  input.onkeydown = (e) => { if (e.key === "Enter") apply(); };
+  form.querySelector(".skip").onclick = () => card.remove();
+  body.appendChild(form);
+
+  card.append(img, body);
+  return card;
+}
+
+/** Mirror taxonomy.slug() closely enough for the input box: a legal label directory. */
+function slugify(text) {
+  return (text || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+}
+
+async function applyLabel(sha256, label, card) {
+  try {
+    await json(`/api/images/${sha256}/label`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, note: "labelled in review" }),
+    });
+    card.remove();
+    loadReview(); loadLabels(); loadImages();
+  } catch (e) {
+    alert(`${e.message}\n\nIf this is a species the model has never seen, restart the GUI with --allow-new-labels.`);
+  }
+}
+
+function showTab(which) {
+  const browsing = which === "browse";
+  document.getElementById("browse-pane").classList.toggle("hidden", !browsing);
+  document.getElementById("review-pane").classList.toggle("hidden", browsing);
+  document.getElementById("tab-browse").classList.toggle("active", browsing);
+  document.getElementById("tab-review").classList.toggle("active", !browsing);
+  if (!browsing) loadReview();
+}
+
+document.getElementById("tab-browse").onclick = () => showTab("browse");
+document.getElementById("tab-review").onclick = () => showTab("review");
+
+loadReview();

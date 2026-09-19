@@ -55,6 +55,54 @@ def manifest_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _split(samples: list[Sample]) -> tuple[list[Sample], list[Sample]]:
+    """Partition into (train, val), rescuing a manifest that lands on one side.
+
+    ``split_for`` (§7.2) is authoritative and is used whenever it yields a usable
+    partition. But it hashes *basenames* into a 1-in-5 val bucket, so a small
+    hand-labelled manifest — exactly what ``export-trainset`` produces after a review
+    session — can legitimately put every photograph in the same bucket. Failing there
+    with "no training samples" would make the label → train loop unusable on the set
+    sizes a human actually produces.
+
+    The fallback re-partitions deterministically by **photograph basename group**,
+    sending every 5th group to val. Grouping by basename is what preserves §7.2's
+    no-leakage property: every crop of one photograph stays on one side, so a
+    re-split can never put the same image in both.
+    """
+    train = [s for s in samples if s.split == "train"]
+    val = [s for s in samples if s.split == "val"]
+    if train and val:
+        return train, val
+
+    groups: dict[str, list[Sample]] = {}
+    for sample in samples:
+        groups.setdefault(sample.path.name, []).append(sample)
+    ordered = sorted(groups)
+    if len(ordered) < 2:
+        # One photograph: train on it and evaluate on it. Honest for a smoke run, and
+        # the reported val accuracy is explicitly not a generalisation estimate.
+        log.warning(
+            "the manifest contains a single photograph; training and evaluating on "
+            "it. The reported val accuracy is not a generalisation estimate."
+        )
+        return samples, samples
+
+    val_names = {name for index, name in enumerate(ordered) if index % 5 == 0}
+    # Guarantee both sides are non-empty even for 2-4 groups.
+    if len(val_names) == len(ordered):
+        val_names = {ordered[0]}
+    rescued_train = [s for s in samples if s.path.name not in val_names]
+    rescued_val = [s for s in samples if s.path.name in val_names]
+    log.warning(
+        "split_for() put all %d samples on one side (%d train / %d val), which small "
+        "hand-labelled manifests do; re-split by photograph into %d train / %d val so "
+        "training can proceed. No photograph appears on both sides.",
+        len(samples), len(train), len(val), len(rescued_train), len(rescued_val),
+    )
+    return rescued_train, rescued_val
+
+
 def _build_model(arch: str, num_classes: int) -> nn.Module:
     if arch == "tinycnn":
         from .tinycnn import TinyCNN
@@ -96,10 +144,7 @@ def train(
             f"training needs at least 2 classes, manifest has {len(classes)}: {classes}"
         )
 
-    train_samples = [s for s in samples if s.split == "train"]
-    val_samples = [s for s in samples if s.split == "val"] or train_samples
-    if not train_samples:
-        raise ConfigError("no training samples after split filtering")
+    train_samples, val_samples = _split(samples)
 
     model = _build_model(config.arch, len(classes)).to(device)
     if backbone_weights is not None:

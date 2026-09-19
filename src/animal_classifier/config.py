@@ -225,6 +225,11 @@ class Config:
     force_bird_head: bool
     allow_new_labels: bool
     config_path: Path | None
+    #: The GUI's active-learning threshold: an animal the model scored below this is
+    #: put in the review queue for a human to name. Defaults to 0.60 — deliberately
+    #: *above* ``min_species_confidence`` (0.45), because the band between them is a
+    #: guess the tool was willing to file but a human should still confirm.
+    review_below: float = 0.60
     no_download: bool = False
     species_model_explicit: bool = False
     ebird_api_key: str | None = field(repr=False, default=None)
@@ -346,6 +351,9 @@ class Config:
             force_bird_head=_flag(layers, "force_bird_head"),
             allow_new_labels=_flag(layers, "allow_new_labels"),
             config_path=toml_origin,
+            review_below=_number_with_default(
+                layers, "review_below", float, 0.60, minimum=0.0, maximum=1.0
+            ),
             no_download=_flag(layers, "no_download"),
             species_model_explicit=layers.find("species_model") is not None,
             ebird_api_key=_ebird_api_key(bird_provider, env),

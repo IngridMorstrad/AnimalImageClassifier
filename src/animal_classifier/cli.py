@@ -296,19 +296,36 @@ def gui(
     allow_new_labels: bool = typer.Option(
         False, "--allow-new-labels", help="Accept labels not yet in the taxonomy/catalog."
     ),
+    review_below: float = typer.Option(
+        None,
+        "--review-below",
+        help="Queue animals scored below this for review [0.60].",
+    ),
 ) -> None:
-    """Serve the review GUI for an already-classified output tree (§6)."""
-    code = _gui(output=output, port=port, allow_new_labels=allow_new_labels)
+    """Serve the review GUI for an already-classified output tree (§6).
+
+    The Review tab is the active-learning queue: every animal the model could not
+    confidently name, least-confident first, with its top guesses as one-click
+    buttons. Labels you apply there become training data — feed them back with
+    `export-trainset` and `train`.
+    """
+    code = _gui(
+        output=output, port=port, allow_new_labels=allow_new_labels,
+        review_below=review_below,
+    )
     raise typer.Exit(code)
 
 
-def _gui(*, output: Path | None, port: int, allow_new_labels: bool) -> int:
+def _gui(
+    *, output: Path | None, port: int, allow_new_labels: bool, review_below: float | None
+) -> int:
     try:
         config = Config.resolve(
             command=Command.GUI,
             cli={
                 "output_root": str(output) if output else None,
                 "allow_new_labels": allow_new_labels or None,
+                "review_below": review_below,
             },
             config_path=_GLOBAL["config_path"],
         )

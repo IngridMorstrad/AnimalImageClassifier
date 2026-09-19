@@ -42,8 +42,42 @@ uv run animal-classifier verify --output ~/animal_pics
 
 **What you get without a species model:** real animal detection and the dominance
 rule, so photos land in `unknown/` (one dominant animal), `multiple/`, `landscape/`
-or `junk/`. To get actual species names (`zebra/`, `elephant/`) train a head — see
-[docs/ARTIFACTS.md](docs/ARTIFACTS.md) — then add `--species-model models/species.acmodel`.
+or `junk/`. To get actual species names, teach it your animals ↓
+
+## Teaching it your animals (the review loop)
+
+The fastest way to get `lion/` and `impala/` directories is to let the tool ask you
+about the animals it cannot name, and train on your answers. No dataset download, no
+manifest writing.
+
+```bash
+# 1. Classify your card. Animals it cannot name land in unknown/.
+uv run animal-classifier classify /Volumes/SDCARD -o ~/animal_pics
+
+# 2. Open the Review tab and name them. It queues every animal scored below 60%
+#    (--review-below), least confident first, with the model's own guesses as
+#    one-click buttons. Use --allow-new-labels for species the model has never seen.
+uv run animal-classifier gui -o ~/animal_pics --allow-new-labels
+
+# 3. Turn your labels into training data and train on them.
+uv run animal-classifier export-trainset -o ~/animal_pics --destination mine.jsonl
+uv run animal-classifier train --manifest mine.jsonl --arch efficientnet_b0 \
+    --out models/species.acmodel \
+    --backbone-weights models/backbones/efficientnet_b0_ra-3dd342df.pth
+
+# 4. Re-run with your model. Fewer photos come back unknown; repeat as you like.
+uv run animal-classifier classify /Volumes/SDCARD -o ~/animal_pics \
+    --species-model models/species.acmodel --reclassify
+```
+
+Each pass shrinks the review queue. Your corrections are never lost — they live in
+the catalog's append-only `overrides` table, they survive `--reclassify`, and they are
+re-applied even after a `--ignore-overrides` run.
+
+Measured on a 12-photo round trip (`tests/e2e/test_e28_review_loop.py`): starting from
+12 unnamed animals, one labelling session produced a model that named **8 of 12**
+automatically, cutting the queue to 6. Step 3's backbone comes from
+[docs/ARTIFACTS.md](docs/ARTIFACTS.md).
 
 ## Setup
 
