@@ -96,7 +96,9 @@ def build(
             handle.write(
                 json.dumps(
                     {
-                        "path": str(images_dir / file_name),
+                        # Absolute, so load_manifest resolves it unambiguously
+                        # regardless of where the manifest itself lives.
+                        "path": str((images_dir / file_name).resolve()),
                         "label": label,
                         "box": [x, y, x + w, y + h],
                         "split": sample_split,
